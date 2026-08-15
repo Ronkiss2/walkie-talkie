@@ -80,9 +80,10 @@
   }
   .sheet-head {
     display: flex; align-items: center; justify-content: space-between;
-    position: sticky; top: 0; background: var(--bg); z-index: 1;
+    background: var(--bg);
     padding: 16px 0 10px;
   }
+  .sheet-close { position: relative; z-index: 2; }
   .sheet-done {
     width: 100%; margin-top: 18px; padding: 15px;
     background: var(--accent); color: #111; border: none; border-radius: 12px;
@@ -368,7 +369,7 @@
     <div class="sheet">
       <div class="sheet-head">
         <h2>Settings</h2>
-        <button class="sheet-close" id="settingsClose">✕</button>
+        <button type="button" class="sheet-close" id="settingsClose">✕</button>
       </div>
 
       <div class="set-group">
@@ -425,7 +426,7 @@
           <input type="checkbox" id="chirpChk" checked /></label>
       </div>
 
-      <button class="sheet-done" id="settingsDone">Done</button>
+      <button type="button" class="sheet-done" id="settingsDone">Done</button>
     </div>
   </div>
 </main>
@@ -1071,10 +1072,17 @@ function speakAloud(text) {
 function initSettings() {
   // Open / close
   const closeSheet = () => $("settingsSheet").classList.remove("show");
-  $("settingsBtn").addEventListener("click", () => $("settingsSheet").classList.add("show"));
-  $("settingsClose").addEventListener("click", closeSheet);
-  $("settingsDone").addEventListener("click", closeSheet);
+  const openSheet = () => $("settingsSheet").classList.add("show");
+  // Bind both click and touchend so a tap always closes on iOS (idempotent)
+  const onTap = (el, fn) => {
+    el.addEventListener("click", fn);
+    el.addEventListener("touchend", (e) => { e.preventDefault(); fn(e); }, { passive: false });
+  };
+  onTap($("settingsBtn"), openSheet);
+  onTap($("settingsClose"), closeSheet);
+  onTap($("settingsDone"), closeSheet);
   $("settingsSheet").addEventListener("click", (e) => { if (e.target.id === "settingsSheet") closeSheet(); });
+  $("settingsSheet").addEventListener("touchend", (e) => { if (e.target.id === "settingsSheet") { e.preventDefault(); closeSheet(); } }, { passive: false });
 
   // Theme
   document.querySelectorAll("#themeSeg button").forEach((b) =>
