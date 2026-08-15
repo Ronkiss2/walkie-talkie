@@ -23,6 +23,12 @@ and hold a button to talk to everyone at once. Works on iPhone + Android, no app
 - **Screen stays awake** while a channel is open, so audio doesn't cut out.
 - **Auto-reconnect** — if the network blips, it rejoins the channel on its own.
 - **Installable** — "Add to Home Screen" gives it an app icon and fullscreen view.
+- **Now-talking banner** showing who currently has the floor.
+- **Radio voice filter** — toggle to make everyone sound like a handheld radio.
+- **Live captions** — real-time speech-to-text of what people say (Chrome/Android;
+  falls back gracefully where the browser lacks speech recognition).
+- **Emoji reactions** and **join/leave chirps** for quick, silent signals.
+- **One-tap invite** — shares a link with the channel baked in (`/?c=<channel>`).
 
 ## Run it on your computer (for testing)
 

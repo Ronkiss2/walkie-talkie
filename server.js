@@ -110,6 +110,21 @@ wss.on("connection", (ws) => {
       broadcast(ws.room, ws.peerId, { type: "chat", name: ws.name, text });
       return;
     }
+
+    // Broadcast a live caption (speech-to-text) to everyone else
+    if (msg.type === "caption") {
+      const text = String(msg.text || "").slice(0, 200);
+      broadcast(ws.room, ws.peerId, { type: "caption", name: ws.name, text, final: !!msg.final });
+      return;
+    }
+
+    // Broadcast an emoji reaction to everyone else
+    if (msg.type === "reaction") {
+      const emoji = String(msg.emoji || "").slice(0, 8);
+      if (!emoji) return;
+      broadcast(ws.room, ws.peerId, { type: "reaction", name: ws.name, emoji });
+      return;
+    }
   });
 
   ws.on("close", () => {

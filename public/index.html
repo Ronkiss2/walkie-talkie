@@ -106,6 +106,35 @@
   .vox-sens label { color: var(--muted); font-size: 13px; }
   .vox-sens input[type=range] { width: 150px; accent-color: var(--accent); }
 
+  /* Live caption bar */
+  .captionbar {
+    display: none; background: rgba(0,0,0,.35); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;
+    font-size: 15px; line-height: 1.35;
+  }
+  .captionbar.show { display: block; }
+  .captionbar .cap-name { color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .captionbar.interim { opacity: .7; font-style: italic; }
+
+  /* Emoji reactions */
+  .reactions { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; }
+  .reactions button {
+    font-size: 22px; line-height: 1; padding: 8px 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; cursor: pointer;
+  }
+  .reactions button:active { transform: scale(.9); }
+  #reactionLayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 40; }
+  .float-emoji {
+    position: absolute; bottom: 120px; font-size: 40px; text-align: center;
+    animation: floatUp 2.2s ease-out forwards;
+  }
+  .float-emoji .who { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  @keyframes floatUp {
+    0% { opacity: 0; transform: translateY(0) scale(.6); }
+    15% { opacity: 1; transform: translateY(-20px) scale(1.1); }
+    100% { opacity: 0; transform: translateY(-220px) scale(1); }
+  }
+
   /* Text line */
   .chat { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
   .messages {
@@ -186,6 +215,8 @@
       <div class="status" id="status">Connecting…</div>
       <div class="top-actions">
         <button class="chip" id="inviteBtn">📲 Invite</button>
+        <button class="chip" id="radioBtn">📻 Radio</button>
+        <button class="chip" id="captionsBtn">📝 Captions</button>
         <button class="chip" id="replayBtn" disabled>🔁 Replay</button>
         <button class="chip" id="masterMuteBtn">🔊 Listening</button>
       </div>
@@ -193,7 +224,15 @@
     <div class="nowtalking" id="nowTalking">
       <span class="live-dot"></span><span id="nowTalkingText">Quiet — no one's talking</span>
     </div>
+    <div class="captionbar" id="captionBar"></div>
     <ul class="peers" id="peerList"></ul>
+    <div class="reactions" id="reactions">
+      <button type="button" data-emoji="👍">👍</button>
+      <button type="button" data-emoji="😂">😂</button>
+      <button type="button" data-emoji="❤️">❤️</button>
+      <button type="button" data-emoji="😮">😮</button>
+      <button type="button" data-emoji="🆘">🆘</button>
+    </div>
     <div class="chat">
       <div class="messages" id="messages"></div>
       <form class="chat-input" id="chatForm">
@@ -215,6 +254,7 @@
         <input type="range" min="0" max="100" id="voxSensSlider" />
       </div>
     </div>
+    <div id="reactionLayer"></div>
   </section>
 </main>
 
@@ -252,7 +292,11 @@ const peers = new Map(); // id -> peer
 
 // Web Audio pipeline
 let ctx, masterGain, remoteMix, outStream, outTrack;
+let voiceBus, radioIn;
+let radioOn = localStorage.getItem("wt_radio") === "1";
 let micSource, micGain, micAnalyser;
+// Live captions
+let recognition = null, captionsOn = false, lastCaptionSent = 0, captionHideTimer = null;
 // Rolling recorder (for replay)
 let ring, ringLen = 0, ringPos = 0, totalWritten = 0, recSampleRate = 48000;
 // Utterance tracking
@@ -305,6 +349,9 @@ async function join() {
   setupChat();
   setupInvite();
   setupVoxSlider();
+  setupRadio();
+  setupCaptions();
+  setupReactions();
   updateTalkUI();
   renderPeers();
   connectSignaling(name, room);
@@ -321,8 +368,38 @@ function ensureCtx() {
   masterGain = ctx.createGain();
   masterGain.connect(ctx.destination);
   remoteMix = ctx.createGain();
+
+  // Shared bus all remote voices feed into (lets us filter/record them together)
+  voiceBus = ctx.createGain();
+  voiceBus.connect(remoteMix);   // recording tap (always the clean signal)
+  buildRadioChain();
+  routeVoiceBus();               // connect voiceBus to dry or filtered path
+
   initRecorder();
   return ctx;
+}
+
+// A bandpass + soft-clip chain that makes voices sound like a handheld radio
+function buildRadioChain() {
+  radioIn = ctx.createGain();
+  const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 450;
+  const lp = ctx.createBiquadFilter(); lp.type = "lowpass";  lp.frequency.value = 2800;
+  const peak = ctx.createBiquadFilter(); peak.type = "peaking"; peak.frequency.value = 1700; peak.Q.value = 1.2; peak.gain.value = 6;
+  const shaper = ctx.createWaveShaper();
+  const n = 256, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; curve[i] = Math.tanh(x * 2.2); }
+  shaper.curve = curve;
+  const outGain = ctx.createGain(); outGain.gain.value = 0.9;
+  radioIn.connect(hp); hp.connect(lp); lp.connect(peak); peak.connect(shaper); shaper.connect(outGain);
+  outGain.connect(masterGain);
+}
+
+// Point the voice bus at the dry path or through the radio filter
+function routeVoiceBus() {
+  try { voiceBus.disconnect(masterGain); } catch {}
+  try { voiceBus.disconnect(radioIn); } catch {}
+  if (radioOn) voiceBus.connect(radioIn);
+  else voiceBus.connect(masterGain);
 }
 
 function buildLocalAudio() {
@@ -387,6 +464,7 @@ function connectSignaling(name, room) {
     } else if (msg.type === "peer-joined") {
       if (!peers.has(msg.id)) createPeer(msg.id, msg.name);
       updateStatus();
+      playChirp(true);   // someone arrived
     } else if (msg.type === "offer") {
       const peer = peers.get(msg.from) || createPeer(msg.from, msg.name || "Anon");
       await peer.pc.setRemoteDescription(msg.sdp);
@@ -400,10 +478,15 @@ function connectSignaling(name, room) {
     } else if (msg.type === "peer-left") {
       removePeer(msg.id);
       updateStatus();
+      playChirp(false);  // someone left
     } else if (msg.type === "chat") {
       addMessage(msg.name || "Anon", msg.text, false);
       playBeep();
       if (navigator.vibrate) navigator.vibrate(40);
+    } else if (msg.type === "caption") {
+      showCaption(msg.name || "Anon", msg.text, msg.final);
+    } else if (msg.type === "reaction") {
+      showReaction(msg.name || "Anon", msg.emoji);
     }
   };
 }
@@ -474,8 +557,7 @@ function buildPeerGraph(peer, stream) {
   peer.gain = ctx.createGain();
   peer.gain.gain.value = peer.muted ? 0 : peer.volume;
   peer.source.connect(peer.gain);
-  peer.gain.connect(masterGain);   // what you hear
-  peer.gain.connect(remoteMix);    // what gets recorded for replay
+  peer.gain.connect(voiceBus);     // shared bus -> (radio filter) -> masterGain, + recorder
   peer.analyser = ctx.createAnalyser();
   peer.analyser.fftSize = 512;
   peer.source.connect(peer.analyser);
@@ -619,6 +701,108 @@ function setupVoxSlider() {
     VOX_THRESH = voxThreshFromSens(Number(slider.value));
     localStorage.setItem("wt_voxsens", slider.value);
   });
+}
+
+// ================= Radio voice filter =================
+function setupRadio() {
+  const b = $("radioBtn");
+  b.classList.toggle("on", radioOn);
+  b.addEventListener("click", () => {
+    radioOn = !radioOn;
+    localStorage.setItem("wt_radio", radioOn ? "1" : "0");
+    b.classList.toggle("on", radioOn);
+    if (ctx) routeVoiceBus();
+  });
+}
+
+// ================= Live captions (speech-to-text) =================
+function setupCaptions() {
+  const b = $("captionsBtn");
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  b.addEventListener("click", () => {
+    if (captionsOn) { stopCaptions(); return; }
+    if (!SR) { toast("Captions aren't supported in this browser (try Chrome)."); return; }
+    captionsOn = true;
+    b.classList.add("on");
+    recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || "en-US";
+    recognition.onresult = onCaptionResult;
+    recognition.onend = () => { if (captionsOn) { try { recognition.start(); } catch {} } };
+    recognition.onerror = () => {};
+    try { recognition.start(); } catch {}
+    toast("Captions on — others will see what you say");
+  });
+}
+function stopCaptions() {
+  captionsOn = false;
+  $("captionsBtn").classList.remove("on");
+  if (recognition) { recognition.onend = null; try { recognition.stop(); } catch {} recognition = null; }
+}
+function onCaptionResult(e) {
+  // Only broadcast while you're actually transmitting
+  if (!talking) return;
+  const r = e.results[e.results.length - 1];
+  const text = r[0].transcript.trim();
+  if (!text) return;
+  const final = r.isFinal;
+  const now = Date.now();
+  if (final || now - lastCaptionSent > 350) {
+    lastCaptionSent = now;
+    if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: "caption", text, final }));
+    showCaption("You", text, final); // show your own too
+  }
+}
+function showCaption(name, text, final) {
+  const bar = $("captionBar");
+  bar.classList.add("show");
+  bar.classList.toggle("interim", !final);
+  bar.innerHTML = `<span class="cap-name"></span><span class="cap-text"></span>`;
+  bar.querySelector(".cap-name").textContent = name + ":";
+  bar.querySelector(".cap-text").textContent = " " + text;
+  clearTimeout(captionHideTimer);
+  captionHideTimer = setTimeout(() => bar.classList.remove("show"), final ? 4000 : 6000);
+}
+
+// ================= Emoji reactions =================
+function setupReactions() {
+  document.querySelectorAll("#reactions button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const emoji = btn.dataset.emoji;
+      showReaction("You", emoji);
+      if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: "reaction", emoji }));
+    });
+  });
+}
+function showReaction(name, emoji) {
+  const layer = $("reactionLayer");
+  const el = document.createElement("div");
+  el.className = "float-emoji";
+  el.style.left = (10 + Math.random() * 70) + "vw";
+  const who = document.createElement("span"); who.className = "who"; who.textContent = name;
+  el.textContent = emoji;
+  el.appendChild(who);
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 2300);
+}
+
+// ================= Join / leave chirps =================
+function playChirp(up) {
+  try {
+    ensureCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    const t = ctx.currentTime;
+    o.frequency.setValueAtTime(up ? 520 : 760, t);
+    o.frequency.exponentialRampToValueAtTime(up ? 780 : 480, t + 0.12);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t); o.stop(t + 0.2);
+  } catch {}
 }
 
 // ================= Mode + talk button =================
