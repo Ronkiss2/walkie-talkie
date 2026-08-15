@@ -185,6 +185,9 @@
   .peers li.muted .peer-name { color: var(--muted); text-decoration: line-through; }
   .peer-mute { background: transparent; border: none; font-size: 18px; cursor: pointer; line-height: 1; padding: 0 2px; }
   .peer-vol { width: 100%; accent-color: var(--accent); }
+  .peer-conn { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .peers li.weak { border-color: #d9822b; }
+  .peers li.weak .peer-conn { color: #eab308; }
   .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 10px 0; }
 
   .status { color: var(--muted); font-size: 14px; }
@@ -424,6 +427,8 @@
           <input type="checkbox" id="readAloudChk" /></label>
         <label class="set-row"><span>🔔 Join / leave chirps</span>
           <input type="checkbox" id="chirpChk" checked /></label>
+        <label class="set-row"><span>🔊 Announce who joins <span class="set-sub">(says their name aloud)</span></span>
+          <input type="checkbox" id="announceChk" /></label>
       </div>
 
       <button type="button" class="sheet-done" id="settingsDone">Done</button>
@@ -436,10 +441,15 @@
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" },
+  // Free TURN relays (used only when a direct link is blocked). Multiple ports /
+  // transports so a bad/firewalled network still finds one that works.
   {
     urls: [
       "turn:openrelay.metered.ca:80",
       "turn:openrelay.metered.ca:443",
+      "turn:openrelay.metered.ca:80?transport=tcp",
       "turn:openrelay.metered.ca:443?transport=tcp"
     ],
     username: "openrelayproject",
@@ -474,6 +484,7 @@ let fxIn, fxOut, fxNodes = [], currentFx = localStorage.getItem("wt_voicefx") ||
 let recognition = null, captionsOn = false, lastCaptionSent = 0, captionHideTimer = null;
 let readAloud = localStorage.getItem("wt_readaloud") === "1";
 let chirpsOn = localStorage.getItem("wt_chirp") !== "0";
+let announceJoins = localStorage.getItem("wt_announce") === "1";
 // Rolling recorder (for replay)
 let ring, ringLen = 0, ringPos = 0, totalWritten = 0, recSampleRate = 48000;
 // Utterance tracking
@@ -691,9 +702,8 @@ function connectSignaling(name, room) {
       myId = msg.id;
       for (const p of msg.peers) {
         const peer = createPeer(p.id, p.name);
-        const offer = await peer.pc.createOffer();
-        await peer.pc.setLocalDescription(offer);
-        signal({ type: "offer", target: p.id, sdp: offer });
+        peer.initiator = true;               // we drive (re)connection for these
+        await sendOffer(peer, p.id);
       }
       if (msg.topic) showTopic(msg.topic);
       updateStatus();
@@ -701,20 +711,26 @@ function connectSignaling(name, room) {
       if (!peers.has(msg.id)) createPeer(msg.id, msg.name);
       updateStatus();
       playChirp(true);   // someone arrived
+      if (announceJoins) speakAloud(`${msg.name || "Someone"} joined`);
     } else if (msg.type === "offer") {
       const peer = peers.get(msg.from) || createPeer(msg.from, msg.name || "Anon");
       await peer.pc.setRemoteDescription(msg.sdp);
       const answer = await peer.pc.createAnswer();
+      answer.sdp = tuneOpus(answer.sdp);
       await peer.pc.setLocalDescription(answer);
-      signal({ type: "answer", target: msg.from, sdp: answer });
+      signal({ type: "answer", target: msg.from, sdp: peer.pc.localDescription });
     } else if (msg.type === "answer") {
-      await peers.get(msg.from)?.pc.setRemoteDescription(msg.sdp);
+      const peer = peers.get(msg.from);
+      if (peer && peer.pc.signalingState !== "stable") await peer.pc.setRemoteDescription(msg.sdp);
     } else if (msg.type === "ice") {
       try { await peers.get(msg.from)?.pc.addIceCandidate(msg.candidate); } catch {}
     } else if (msg.type === "peer-left") {
+      const gone = peers.get(msg.id);
+      const goneName = gone ? gone.name : "Someone";
       removePeer(msg.id);
       updateStatus();
       playChirp(false);  // someone left
+      if (announceJoins) speakAloud(`${goneName} left`);
     } else if (msg.type === "chat") {
       addMessage(msg.name || "Anon", msg.text, false);
       playBeep();
@@ -760,7 +776,7 @@ function addMessage(name, text, me) {
 function createPeer(id, name) {
   if (peers.has(id)) return peers.get(id);
 
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 2 });
   pc.addTrack(outTrack, outStream); // send our (gated) mic
 
   pc.onicecandidate = (e) => {
@@ -776,7 +792,8 @@ function createPeer(id, name) {
 
   const peer = { pc, name, audioEl, el: null, muteBtn: null, volEl: null,
                  source: null, gain: null, analyser: null,
-                 level: 0, wasSpeaking: false, lastAlert: 0, muted: false, volume: 1 };
+                 level: 0, wasSpeaking: false, lastAlert: 0, muted: false, volume: 1,
+                 initiator: false, connState: "new", restarting: false, discTimer: null };
 
   pc.ontrack = (e) => {
     const stream = e.streams[0];
@@ -785,9 +802,72 @@ function createPeer(id, name) {
     buildPeerGraph(peer, stream);
   };
 
+  // Watch the link and auto-heal it when the network gets flaky
+  pc.onconnectionstatechange = () => handleConnState(peer, id);
+  pc.oniceconnectionstatechange = () => handleConnState(peer, id);
+
   peers.set(id, peer);
   renderPeers();
   return peer;
+}
+
+// Enable Opus packet-loss recovery (FEC), silence-skipping (DTX), and a modest
+// bitrate cap — this is what keeps audio intelligible on a weak connection.
+function tuneOpus(sdp) {
+  const m = sdp.match(/a=rtpmap:(\d+) opus\/48000/i);
+  if (!m) return sdp;
+  const pt = m[1];
+  const wanted = "useinbandfec=1;usedtx=1;maxaveragebitrate=24000;stereo=0";
+  const fmtp = new RegExp(`a=fmtp:${pt} ([^\\r\\n]*)`);
+  if (fmtp.test(sdp)) {
+    return sdp.replace(fmtp, (line, params) => {
+      let p = params;
+      for (const kv of wanted.split(";")) {
+        const [k, v] = kv.split("=");
+        if (new RegExp(`\\b${k}=`).test(p)) p = p.replace(new RegExp(`${k}=[^;]*`), `${k}=${v}`);
+        else p += `;${k}=${v}`;
+      }
+      return `a=fmtp:${pt} ${p}`;
+    });
+  }
+  return sdp.replace(new RegExp(`(a=rtpmap:${pt} opus/48000/2\\r?\\n)`), `$1a=fmtp:${pt} minptime=10;${wanted}\r\n`);
+}
+
+async function sendOffer(peer, id, iceRestart) {
+  try {
+    const offer = await peer.pc.createOffer(iceRestart ? { iceRestart: true } : undefined);
+    offer.sdp = tuneOpus(offer.sdp);
+    await peer.pc.setLocalDescription(offer);
+    signal({ type: "offer", target: id, sdp: peer.pc.localDescription });
+  } catch {}
+}
+
+function handleConnState(peer, id) {
+  const st = peer.pc.connectionState || peer.pc.iceConnectionState;
+  peer.connState = st;
+  updatePeerConn(peer);
+
+  if (st === "failed") {
+    tryIceRestart(peer, id);
+  } else if (st === "disconnected") {
+    // Might just be a brief blip — wait, then heal if still down
+    clearTimeout(peer.discTimer);
+    peer.discTimer = setTimeout(() => {
+      if (peer.pc.connectionState === "disconnected" || peer.pc.iceConnectionState === "disconnected") {
+        tryIceRestart(peer, id);
+      }
+    }, 2500);
+  } else if (st === "connected" || st === "completed") {
+    clearTimeout(peer.discTimer);
+    peer.restarting = false;
+  }
+}
+
+function tryIceRestart(peer, id) {
+  if (!peer.initiator || peer.restarting) return; // one side drives the restart
+  peer.restarting = true;
+  sendOffer(peer, id, true);
+  setTimeout(() => { peer.restarting = false; }, 5000);
 }
 
 function buildPeerGraph(peer, stream) {
@@ -858,6 +938,7 @@ function renderPeers() {
       `<div class="peer-main">
          <span class="dot"></span>
          <span class="peer-name"></span>
+         <span class="peer-conn"></span>
          <button class="peer-mute" title="Mute">${peer.muted ? "🔇" : "🔊"}</button>
        </div>
        <input class="peer-vol" type="range" min="0" max="100" value="${Math.round(peer.volume * 100)}" />`;
@@ -869,7 +950,25 @@ function renderPeers() {
     peer.el = li;
     peer.muteBtn = muteBtn;
     peer.volEl = vol;
+    peer.connEl = li.querySelector(".peer-conn");
+    updatePeerConn(peer);
     list.appendChild(li);
+  }
+}
+
+// Show a per-person connection indicator (green = good, amber = reconnecting)
+function updatePeerConn(peer) {
+  if (!peer.connEl) return;
+  const st = peer.connState;
+  if (st === "connected" || st === "completed") {
+    peer.connEl.textContent = "";
+    peer.el && peer.el.classList.remove("weak");
+  } else if (st === "failed" || st === "disconnected") {
+    peer.connEl.textContent = "⚠ reconnecting…";
+    peer.el && peer.el.classList.add("weak");
+  } else {
+    peer.connEl.textContent = "connecting…";
+    peer.el && peer.el.classList.remove("weak");
   }
 }
 
@@ -1125,6 +1224,14 @@ function initSettings() {
   chirpChk.addEventListener("change", () => {
     chirpsOn = chirpChk.checked;
     localStorage.setItem("wt_chirp", chirpsOn ? "1" : "0");
+  });
+
+  const annChk = $("announceChk");
+  annChk.checked = announceJoins;
+  annChk.addEventListener("change", () => {
+    announceJoins = annChk.checked;
+    localStorage.setItem("wt_announce", announceJoins ? "1" : "0");
+    if (announceJoins) speakAloud("Announcements on");
   });
 
   // Apply saved appearance + reflect current selections

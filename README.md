@@ -65,8 +65,12 @@ Other free options: Glitch, Railway, Fly.io, or Cloudflare Tunnel pointing at yo
 
 - **6+ people:** the mesh gets heavy. For bigger groups, route audio through one
   server (an "SFU" like mediasoup) — more work, still doable at $0.
-- **TURN relay:** the config includes a free public TURN server (Open Relay) so it
-  works on strict networks. Free relays can be flaky; if some networks fail to
-  connect, that's the piece to upgrade.
+- **Bad-signal handling:** audio uses Opus with in-band FEC (packet-loss recovery),
+  DTX (skips silence), and a capped bitrate, so it stays intelligible on weak links.
+  Dropped peer connections auto-heal via ICE restart, and each person shows a
+  connection indicator ("⚠ reconnecting…") when their link is struggling.
+- **TURN relay:** the config includes free public STUN + TURN servers so it works on
+  strict networks. Free relays can be flaky; if some networks fail to connect, a
+  paid TURN service (or your own coturn) is the piece to upgrade.
 - **Free hosts sleep:** Render's free tier spins down when idle, so the first load
   after a quiet period takes ~30s to wake up.
