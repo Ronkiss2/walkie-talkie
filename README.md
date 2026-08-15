@@ -10,8 +10,14 @@ and hold a button to talk to everyone at once. Works on iPhone + Android, no app
   hard-to-guess name (e.g. `roadtrip-x7k2`).
 
 ### Features
-- **Push-to-talk or hands-free** — switch modes with the toggle above the button.
-  PTT = hold to talk; hands-free = tap on / tap off.
+- **Three talk modes** (toggle above the button): **push-to-talk** (hold),
+  **hands-free** (tap on / tap off), and **voice-activated (VOX)** — transmits
+  automatically when you speak, no button.
+- **Replay last message** — a button that replays the last thing someone said,
+  for when you missed it. Keeps a rolling 30-second buffer.
+- **Per-person mute + volume**, plus a **master mute** to go quiet without leaving.
+  (Volume is routed through Web Audio so it works on iPhone, which ignores plain
+  HTML audio volume.)
 - **Talk alert** — a beep (and a buzz on Android) when someone starts talking, so
   you notice with the phone in your pocket.
 - **Screen stays awake** while a channel is open, so audio doesn't cut out.

@@ -46,7 +46,7 @@
   /* Join screen */
   .join { max-width: 380px; margin: auto; width: 100%; text-align: center; }
   .join p { color: var(--muted); }
-  input {
+  input[type=text], input:not([type]) {
     width: 100%; padding: 14px 16px; margin: 8px 0;
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 12px; color: var(--text); font-size: 16px;
@@ -60,26 +60,46 @@
 
   /* Talk screen */
   .talk { flex: 1; display: none; flex-direction: column; }
-  .peers {
-    list-style: none; padding: 0; margin: 0 0 12px;
-    display: flex; flex-wrap: wrap; gap: 8px;
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .top-actions { display: flex; gap: 8px; }
+  .chip {
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    padding: 8px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
   }
-  .peers li {
-    background: var(--panel); border: 1px solid var(--line);
-    padding: 8px 12px; border-radius: 20px; font-size: 14px;
-    display: flex; align-items: center; gap: 8px; transition: border-color .1s;
-  }
-  .peers li .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .peers li.speaking { border-color: var(--live); }
-  .peers li.speaking .dot { background: var(--live); box-shadow: 0 0 8px var(--live); }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .chip.on { background: var(--accent); color: #111; border-color: var(--accent); }
 
-  .status { text-align: center; color: var(--muted); font-size: 14px; margin: 6px 0 18px; }
+  .peers { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 8px; }
+  .peers li {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; transition: border-color .1s;
+  }
+  .peers li.speaking { border-color: var(--live); }
+  .peer-main { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .peers li.speaking .dot { background: var(--live); box-shadow: 0 0 8px var(--live); }
+  .peer-name { flex: 1; font-size: 14px; }
+  .peers li.muted .peer-name { color: var(--muted); text-decoration: line-through; }
+  .peer-mute { background: transparent; border: none; font-size: 18px; cursor: pointer; line-height: 1; padding: 0 2px; }
+  .peer-vol { width: 100%; accent-color: var(--accent); }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 10px 0; }
+
+  .status { color: var(--muted); font-size: 14px; }
   .ptt-wrap { margin-top: auto; padding-bottom: 24px; text-align: center; }
+  .mode {
+    display: inline-flex; margin: 0 auto 16px; padding: 4px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  }
+  .mode-btn {
+    border: none; background: transparent; color: var(--muted);
+    padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .mode-btn.active { background: var(--accent); color: #111; }
   .ptt {
-    width: 220px; height: 220px; border-radius: 50%;
+    width: 210px; height: 210px; border-radius: 50%;
     background: radial-gradient(circle at 50% 40%, #1c2732, #0e141b);
     border: 3px solid var(--line);
-    color: var(--text); font-size: 72px;
+    color: var(--text); font-size: 68px;
     display: inline-flex; align-items: center; justify-content: center;
     touch-action: none; cursor: pointer;
     user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
@@ -88,27 +108,16 @@
   }
   .ptt, .ptt * { pointer-events: none; }
   #pttBtn { pointer-events: auto; }
-  .ptt-label {
-    margin-top: 18px; font-size: 20px; font-weight: 700; letter-spacing: .5px;
-    user-select: none; -webkit-user-select: none;
-  }
   .ptt.active {
     background: radial-gradient(circle at 50% 40%, #ff9a4a, var(--accent));
     border-color: #ffd0a8; transform: scale(0.97);
   }
+  .ptt-label {
+    margin-top: 18px; font-size: 20px; font-weight: 700; letter-spacing: .5px;
+    user-select: none; -webkit-user-select: none;
+  }
   .ptt-label.active { color: var(--accent); }
-  .hint { color: var(--muted); font-size: 13px; margin-top: 14px; }
-
-  /* Mode switch: push-to-talk vs hands-free */
-  .mode {
-    display: inline-flex; margin: 0 auto 4px; padding: 4px;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-  }
-  .mode-btn {
-    border: none; background: transparent; color: var(--muted);
-    padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
-  }
-  .mode-btn.active { background: var(--accent); color: #111; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 14px; min-height: 18px; }
 </style>
 </head>
 <body>
@@ -129,12 +138,19 @@
 
   <!-- TALK -->
   <section class="talk" id="talkScreen">
+    <div class="topbar">
+      <div class="status" id="status">Connecting…</div>
+      <div class="top-actions">
+        <button class="chip" id="replayBtn" disabled>🔁 Replay</button>
+        <button class="chip" id="masterMuteBtn">🔊 Listening</button>
+      </div>
+    </div>
     <ul class="peers" id="peerList"></ul>
-    <div class="status" id="status">Connecting…</div>
     <div class="ptt-wrap">
       <div class="mode" id="modeToggle">
         <button class="mode-btn" data-mode="ptt">Push-to-talk</button>
         <button class="mode-btn" data-mode="hands">Hands-free</button>
+        <button class="mode-btn" data-mode="vox">Voice</button>
       </div>
       <div class="ptt" id="pttBtn">🎙️</div>
       <div class="ptt-label" id="pttLabel">Hold to talk</div>
@@ -144,9 +160,7 @@
 </main>
 
 <script>
-// ---- Connection config ----
-// STUN helps phones discover their public address. TURN relays audio when a
-// direct connection is blocked by a strict network (free public relay below).
+// ================= Config =================
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -160,25 +174,35 @@ const ICE_SERVERS = [
     credential: "openrelayproject"
   }
 ];
+const SPEAK_THRESH = 8;   // remote "is talking" sensitivity
+const VOX_THRESH = 14;    // local voice-activation sensitivity
+const VOX_HANGOVER = 700; // ms of silence before VOX stops transmitting
 
+// ================= State =================
 const $ = (id) => document.getElementById(id);
-let ws, myId, localStream, micTrack;
-let talkMode = localStorage.getItem("wt_mode") || "ptt"; // "ptt" | "hands"
+let ws, myId, localStream;
+let talkMode = localStorage.getItem("wt_mode") || "ptt"; // ptt | hands | vox
 let talking = false;
 let currentName = "", currentRoom = "", reconnectTimer = null, closingByUser = false;
 let wakeLock = null;
-const peers = new Map(); // peerId -> { pc, name, audioEl, analyser, el, lastAlert }
+let masterMuted = false;
+const peers = new Map(); // id -> peer
 
-// Register the service worker so the app can be installed to the home screen
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch(() => {});
-}
+// Web Audio pipeline
+let ctx, masterGain, remoteMix, outStream, outTrack;
+let micSource, micGain, micAnalyser;
+// Rolling recorder (for replay)
+let ring, ringLen = 0, ringPos = 0, totalWritten = 0, recSampleRate = 48000;
+// Utterance tracking
+let inUtt = false, uttStart = 0, lastVoiceT = 0, loudestName = "", lastUtt = null;
+let voxRunning = false;
 
-// ---- Join flow ----
+// Register service worker (enables "Add to Home Screen")
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+
+// ================= Join =================
 $("joinBtn").onclick = join;
 $("roomInput").addEventListener("keydown", (e) => { if (e.key === "Enter") join(); });
-
-// Remember last used name/channel
 $("nameInput").value = localStorage.getItem("wt_name") || "";
 $("roomInput").value = localStorage.getItem("wt_room") || "";
 
@@ -189,7 +213,6 @@ async function join() {
   localStorage.setItem("wt_name", name);
   localStorage.setItem("wt_room", room);
 
-  // Get the mic (this tap is the user gesture that unlocks audio on iOS)
   try {
     localStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -199,36 +222,69 @@ async function join() {
     alert("Microphone access is required to talk. Please allow it and try again.");
     return;
   }
-  micTrack = localStream.getAudioTracks()[0];
-  micTrack.enabled = false; // silent until you hold the button
 
+  buildLocalAudio();       // mic -> gain -> outgoing track (gain 0 = silent)
   $("joinScreen").style.display = "none";
   $("talkScreen").style.display = "flex";
   $("roomLabel").textContent = "#" + room.toLowerCase();
 
   setupModeToggle();
   setupPTT();
+  setupTopActions();
   updateTalkUI();
+  renderPeers();
   connectSignaling(name, room);
   requestWakeLock();
+  requestAnimationFrame(monitorLoop);
+  maybeStartVox();
 }
 
-// ---- Keep the screen awake so audio keeps flowing while the channel is open ----
-async function requestWakeLock() {
-  try {
-    if ("wakeLock" in navigator) {
-      wakeLock = await navigator.wakeLock.request("screen");
+// ================= Web Audio setup =================
+function ensureCtx() {
+  if (ctx) return ctx;
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  recSampleRate = ctx.sampleRate;
+  masterGain = ctx.createGain();
+  masterGain.connect(ctx.destination);
+  remoteMix = ctx.createGain();
+  initRecorder();
+  return ctx;
+}
+
+function buildLocalAudio() {
+  ensureCtx();
+  ctx.resume();
+  micSource = ctx.createMediaStreamSource(localStream);
+  micGain = ctx.createGain();
+  micGain.gain.value = 0; // silent until we transmit
+  const dest = ctx.createMediaStreamDestination();
+  micSource.connect(micGain);
+  micGain.connect(dest);
+  micAnalyser = ctx.createAnalyser();
+  micAnalyser.fftSize = 512;
+  micSource.connect(micAnalyser);
+  outStream = dest.stream;
+  outTrack = outStream.getAudioTracks()[0];
+}
+
+function initRecorder() {
+  ringLen = Math.floor(recSampleRate * 30); // keep last 30s
+  ring = new Float32Array(ringLen);
+  const proc = ctx.createScriptProcessor(4096, 1, 1);
+  proc.onaudioprocess = (e) => {
+    const inp = e.inputBuffer.getChannelData(0);
+    for (let i = 0; i < inp.length; i++) {
+      ring[ringPos] = inp[i];
+      ringPos = (ringPos + 1) % ringLen;
     }
-  } catch {}
+    totalWritten += inp.length;
+    e.outputBuffer.getChannelData(0).fill(0); // stay silent (playback is via masterGain)
+  };
+  remoteMix.connect(proc);
+  proc.connect(ctx.destination);
 }
-document.addEventListener("visibilitychange", () => {
-  // The OS drops the wake lock when you switch away — grab it again on return
-  if (document.visibilityState === "visible" && $("talkScreen").style.display === "flex") {
-    requestWakeLock();
-  }
-});
 
-// ---- Signaling ----
+// ================= Signaling =================
 function connectSignaling(name, room) {
   currentName = name;
   currentRoom = room;
@@ -237,9 +293,9 @@ function connectSignaling(name, room) {
   ws.onopen = () => ws.send(JSON.stringify({ type: "join", room, name }));
   ws.onclose = () => {
     if (closingByUser) return;
-    // Connection dropped (Wi-Fi blip, server nap, network switch) — rebuild
     setStatus("Reconnecting…");
     for (const id of [...peers.keys()]) removePeer(id);
+    renderPeers();
     clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(() => connectSignaling(currentName, currentRoom), 1500);
   };
@@ -247,16 +303,14 @@ function connectSignaling(name, room) {
     const msg = JSON.parse(e.data);
     if (msg.type === "welcome") {
       myId = msg.id;
-      // We initiate a connection to everyone already in the room
       for (const p of msg.peers) {
-        const pc = createPeer(p.id, p.name);
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+        const peer = createPeer(p.id, p.name);
+        const offer = await peer.pc.createOffer();
+        await peer.pc.setLocalDescription(offer);
         signal({ type: "offer", target: p.id, sdp: offer });
       }
       updateStatus();
     } else if (msg.type === "peer-joined") {
-      // Someone new joined — they will send US an offer, so just note them
       if (!peers.has(msg.id)) createPeer(msg.id, msg.name);
       updateStatus();
     } else if (msg.type === "offer") {
@@ -275,177 +329,298 @@ function connectSignaling(name, room) {
     }
   };
 }
-
 function signal(msg) { ws.send(JSON.stringify(msg)); }
 
-// ---- WebRTC peer (one per other person) ----
+// ================= Peers =================
 function createPeer(id, name) {
   if (peers.has(id)) return peers.get(id);
 
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  // Send our mic
-  localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+  pc.addTrack(outTrack, outStream); // send our (gated) mic
 
   pc.onicecandidate = (e) => {
     if (e.candidate) signal({ type: "ice", target: id, candidate: e.candidate });
   };
 
-  // Play their voice
+  // Keep a muted <audio> element attached so the remote stream stays flowing
+  // (browser quirk); actual sound is routed through Web Audio for volume control.
   const audioEl = new Audio();
   audioEl.autoplay = true;
   audioEl.playsInline = true;
+  audioEl.muted = true;
+
+  const peer = { pc, name, audioEl, el: null, muteBtn: null, volEl: null,
+                 source: null, gain: null, analyser: null,
+                 level: 0, wasSpeaking: false, lastAlert: 0, muted: false, volume: 1 };
+
   pc.ontrack = (e) => {
-    audioEl.srcObject = e.streams[0];
+    const stream = e.streams[0];
+    audioEl.srcObject = stream;
     audioEl.play().catch(() => {});
-    watchSpeaking(id, e.streams[0]);
+    buildPeerGraph(peer, stream);
   };
 
-  const el = document.createElement("li");
-  el.innerHTML = `<span class="dot"></span><span>${escapeHtml(name)}</span>`;
-  $("peerList").appendChild(el);
-
-  const peer = { pc, name, audioEl, el, analyser: null, wasSpeaking: false, lastAlert: 0 };
   peers.set(id, peer);
+  renderPeers();
   return peer;
+}
+
+function buildPeerGraph(peer, stream) {
+  ensureCtx();
+  peer.source = ctx.createMediaStreamSource(stream);
+  peer.gain = ctx.createGain();
+  peer.gain.gain.value = peer.muted ? 0 : peer.volume;
+  peer.source.connect(peer.gain);
+  peer.gain.connect(masterGain);   // what you hear
+  peer.gain.connect(remoteMix);    // what gets recorded for replay
+  peer.analyser = ctx.createAnalyser();
+  peer.analyser.fftSize = 512;
+  peer.source.connect(peer.analyser);
+  startPeerMeter(peer);
+}
+
+function startPeerMeter(peer) {
+  const data = new Uint8Array(peer.analyser.frequencyBinCount);
+  const tick = () => {
+    if (!peer.analyser || peer.pc.connectionState === "closed") return;
+    peer.analyser.getByteFrequencyData(data);
+    let sum = 0;
+    for (const v of data) sum += v;
+    peer.level = peer.muted ? 0 : sum / data.length;
+    const speaking = peer.level > SPEAK_THRESH;
+    if (peer.el) peer.el.classList.toggle("speaking", speaking);
+    if (speaking && !peer.wasSpeaking) {
+      const now = Date.now();
+      if (now - peer.lastAlert > 1500) {
+        peer.lastAlert = now;
+        playBeep();
+        if (navigator.vibrate) navigator.vibrate(70);
+      }
+    }
+    peer.wasSpeaking = speaking;
+    requestAnimationFrame(tick);
+  };
+  tick();
 }
 
 function removePeer(id) {
   const p = peers.get(id);
   if (!p) return;
   try { p.pc.close(); } catch {}
-  p.audioEl.srcObject = null;
-  p.el.remove();
+  try { p.source && p.source.disconnect(); } catch {}
+  try { p.gain && p.gain.disconnect(); } catch {}
+  if (p.audioEl) p.audioEl.srcObject = null;
   peers.delete(id);
+  renderPeers();
 }
 
-// ---- Mode switch (push-to-talk vs hands-free) ----
+// ================= Peer list UI (mute + volume) =================
+function renderPeers() {
+  const list = $("peerList");
+  list.innerHTML = "";
+  if (peers.size === 0) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "No one else here yet — share the link + channel name.";
+    li.style.background = "transparent";
+    li.style.border = "none";
+    list.appendChild(li);
+    return;
+  }
+  for (const peer of peers.values()) {
+    const li = document.createElement("li");
+    li.classList.toggle("muted", peer.muted);
+    li.innerHTML =
+      `<div class="peer-main">
+         <span class="dot"></span>
+         <span class="peer-name"></span>
+         <button class="peer-mute" title="Mute">${peer.muted ? "🔇" : "🔊"}</button>
+       </div>
+       <input class="peer-vol" type="range" min="0" max="100" value="${Math.round(peer.volume * 100)}" />`;
+    li.querySelector(".peer-name").textContent = peer.name;
+    const muteBtn = li.querySelector(".peer-mute");
+    const vol = li.querySelector(".peer-vol");
+    muteBtn.addEventListener("click", () => togglePeerMute(peer));
+    vol.addEventListener("input", () => setPeerVolume(peer, vol.value / 100));
+    peer.el = li;
+    peer.muteBtn = muteBtn;
+    peer.volEl = vol;
+    list.appendChild(li);
+  }
+}
+
+function togglePeerMute(peer) {
+  peer.muted = !peer.muted;
+  if (peer.gain) peer.gain.gain.value = peer.muted ? 0 : peer.volume;
+  if (peer.muteBtn) peer.muteBtn.textContent = peer.muted ? "🔇" : "🔊";
+  if (peer.el) peer.el.classList.toggle("muted", peer.muted);
+}
+function setPeerVolume(peer, v) {
+  peer.volume = v;
+  if (!peer.muted && peer.gain) peer.gain.gain.value = v;
+}
+
+// ================= Top actions (replay + master mute) =================
+function setupTopActions() {
+  $("replayBtn").addEventListener("click", replayLast);
+  $("masterMuteBtn").addEventListener("click", toggleMasterMute);
+}
+function toggleMasterMute() {
+  masterMuted = !masterMuted;
+  if (masterGain) masterGain.gain.value = masterMuted ? 0 : 1;
+  const b = $("masterMuteBtn");
+  b.classList.toggle("on", masterMuted);
+  b.textContent = masterMuted ? "🔇 Muted" : "🔊 Listening";
+}
+
+// ================= Mode + talk button =================
 function setupModeToggle() {
   document.querySelectorAll(".mode-btn").forEach((b) => {
     b.addEventListener("click", () => {
       talkMode = b.dataset.mode;
       localStorage.setItem("wt_mode", talkMode);
-      stopTalk();          // switching modes always ends any live transmission
+      setTransmitting(false);
       updateTalkUI();
+      maybeStartVox();
     });
   });
-  updateTalkUI();
 }
-
-// ---- Talk button ----
 function setupPTT() {
   const btn = $("pttBtn");
   btn.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    if (talkMode === "ptt") startTalk();
-    else toggleTalk();      // hands-free: tap on / tap off
+    if (talkMode === "ptt") setTransmitting(true);
+    else if (talkMode === "hands") setTransmitting(!talking);
+    // vox ignores the button (automatic)
   });
-  const release = (e) => { e.preventDefault(); if (talkMode === "ptt") stopTalk(); };
+  const release = (e) => { e.preventDefault(); if (talkMode === "ptt") setTransmitting(false); };
   btn.addEventListener("pointerup", release);
   btn.addEventListener("pointercancel", release);
   btn.addEventListener("pointerleave", release);
-  // Kill the iOS long-press "copy / select" callout
   btn.addEventListener("contextmenu", (e) => e.preventDefault());
   btn.addEventListener("selectstart", (e) => e.preventDefault());
-  // Spacebar = push-to-talk on desktop
-  window.addEventListener("keydown", (e) => { if (e.code === "Space" && !e.repeat && talkMode === "ptt") { e.preventDefault(); startTalk(); } });
-  window.addEventListener("keyup", (e) => { if (e.code === "Space" && talkMode === "ptt") { e.preventDefault(); stopTalk(); } });
+  window.addEventListener("keydown", (e) => { if (e.code === "Space" && !e.repeat && talkMode === "ptt") { e.preventDefault(); setTransmitting(true); } });
+  window.addEventListener("keyup", (e) => { if (e.code === "Space" && talkMode === "ptt") { e.preventDefault(); setTransmitting(false); } });
 }
 
-function toggleTalk() { talking ? stopTalk() : startTalk(); }
-
-function startTalk() {
-  if (!micTrack || talking) return;
-  talking = true;
-  micTrack.enabled = true;
-  updateTalkUI();
-}
-function stopTalk() {
-  if (!micTrack || !talking) { talking = false; if (micTrack) micTrack.enabled = false; updateTalkUI(); return; }
-  talking = false;
-  micTrack.enabled = false;
+function setTransmitting(on) {
+  if (!micGain) return;
+  talking = on;
+  micGain.gain.value = on ? 1 : 0;
   updateTalkUI();
 }
 
-// Reflect current mode + talking state in the button and labels
 function updateTalkUI() {
   document.querySelectorAll(".mode-btn").forEach((b) =>
     b.classList.toggle("active", b.dataset.mode === talkMode));
   $("pttBtn").classList.toggle("active", talking);
   $("pttLabel").classList.toggle("active", talking);
-  if (talking) {
-    $("pttLabel").textContent = talkMode === "ptt" ? "Talking…" : "Talking — tap to stop";
-  } else {
-    $("pttLabel").textContent = talkMode === "ptt" ? "Hold to talk" : "Tap to talk";
-  }
-  $("talkHint").textContent = talkMode === "ptt"
-    ? "Hold the button to broadcast to everyone in the channel."
-    : "Tap to start talking, tap again to stop.";
+  const labels = {
+    ptt:   { idle: "Hold to talk",  live: "Talking…",              hint: "Hold the button to broadcast to everyone in the channel." },
+    hands: { idle: "Tap to talk",   live: "Talking — tap to stop", hint: "Tap to start talking, tap again to stop." },
+    vox:   { idle: "Just talk",     live: "Talking…",              hint: "Voice-activated — transmits automatically when you speak." }
+  }[talkMode];
+  $("pttLabel").textContent = talking ? labels.live : labels.idle;
+  $("talkHint").textContent = labels.hint;
 }
 
-// ---- Alert tone when someone starts talking ----
+// ================= VOX (voice-activated) =================
+function maybeStartVox() {
+  if (talkMode === "vox" && !voxRunning) {
+    voxRunning = true;
+    requestAnimationFrame(voxTick);
+  }
+}
+function voxTick() {
+  if (talkMode !== "vox") { voxRunning = false; if (talking) setTransmitting(false); return; }
+  if (micAnalyser) {
+    const data = new Uint8Array(micAnalyser.frequencyBinCount);
+    micAnalyser.getByteFrequencyData(data);
+    let sum = 0; for (const v of data) sum += v;
+    const level = sum / data.length;
+    const now = performance.now();
+    if (level > VOX_THRESH) { lastVoiceT = now; if (!talking) setTransmitting(true); }
+    else if (talking && now - lastVoiceT > VOX_HANGOVER) { setTransmitting(false); }
+  }
+  requestAnimationFrame(voxTick);
+}
+
+// ================= Replay last message =================
+function monitorLoop() {
+  let any = false, maxLvl = 0, name = "";
+  for (const p of peers.values()) {
+    if (p.level > SPEAK_THRESH) any = true;
+    if (p.level > maxLvl) { maxLvl = p.level; name = p.name; }
+  }
+  const now = performance.now();
+  if (any) {
+    lastVoiceT = now;
+    if (!inUtt) { inUtt = true; uttStart = totalWritten; }
+    if (maxLvl > SPEAK_THRESH) loudestName = name;
+  } else if (inUtt && now - lastVoiceT > 600) {
+    inUtt = false;
+    lastUtt = { start: uttStart, end: totalWritten, name: loudestName };
+    const b = $("replayBtn");
+    b.disabled = false;
+    b.textContent = "🔁 Replay" + (loudestName ? " (" + loudestName + ")" : "");
+  }
+  requestAnimationFrame(monitorLoop);
+}
+
+function replayLast() {
+  if (!lastUtt || !ring) return;
+  ensureCtx();
+  ctx.resume();
+  const sr = recSampleRate;
+  let start = lastUtt.start, end = lastUtt.end;
+  const maxLen = Math.min(ringLen, Math.floor(sr * 15));
+  let len = end - start;
+  if (len <= 0) return;
+  if (len > maxLen) { start = end - maxLen; len = maxLen; }
+  const oldest = totalWritten - ringLen;      // earliest sample still in the ring
+  if (start < oldest) { start = oldest; len = end - start; }
+  if (len <= 0) return;
+
+  const buf = ctx.createBuffer(1, len, sr);
+  const ch = buf.getChannelData(0);
+  let pos = ((ringPos - (totalWritten - start)) % ringLen + ringLen) % ringLen;
+  for (let i = 0; i < len; i++) { ch[i] = ring[pos]; pos = (pos + 1) % ringLen; }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination); // always audible, even if master-muted
+  src.start();
+}
+
+// ================= Alert tone =================
 function playBeep() {
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
+    ensureCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
     o.type = "sine";
     o.frequency.value = 680;
-    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.22, audioCtx.currentTime + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.16);
-    o.connect(g); g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.16);
+    o.connect(g); g.connect(ctx.destination);
     o.start();
-    o.stop(audioCtx.currentTime + 0.18);
+    o.stop(ctx.currentTime + 0.18);
   } catch {}
 }
 
-// ---- "Who's talking" indicator ----
-let audioCtx;
-function watchSpeaking(id, stream) {
-  try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const src = audioCtx.createMediaStreamSource(stream);
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 512;
-    src.connect(analyser);
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    const peer = peers.get(id);
-    if (peer) peer.analyser = analyser;
-    const tick = () => {
-      const peer = peers.get(id);
-      if (!peer) return;
-      analyser.getByteFrequencyData(data);
-      let sum = 0;
-      for (const v of data) sum += v;
-      const level = sum / data.length;
-      const speaking = level > 8;
-      peer.el.classList.toggle("speaking", speaking);
-
-      // Rising edge: someone just started talking -> alert (max once per 1.5s)
-      if (speaking && !peer.wasSpeaking) {
-        const now = Date.now();
-        if (now - peer.lastAlert > 1500) {
-          peer.lastAlert = now;
-          playBeep();
-          if (navigator.vibrate) navigator.vibrate(70); // Android; ignored on iOS
-        }
-      }
-      peer.wasSpeaking = speaking;
-      requestAnimationFrame(tick);
-    };
-    tick();
-  } catch {}
+// ================= Wake lock =================
+async function requestWakeLock() {
+  try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch {}
 }
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && $("talkScreen").style.display === "flex") requestWakeLock();
+});
 
-// ---- Status text ----
+// ================= Status =================
 function setStatus(t) { $("status").textContent = t; }
 function updateStatus() {
   const n = peers.size;
-  setStatus(n === 0 ? "Waiting for others to join this channel…" : `${n} other${n === 1 ? "" : "s"} in the channel`);
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  setStatus(n === 0 ? "Waiting for others…" : `${n} other${n === 1 ? "" : "s"} in the channel`);
 }
 </script>
 </body>
