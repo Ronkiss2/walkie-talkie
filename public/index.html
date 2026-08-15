@@ -75,9 +75,13 @@
     border: 3px solid var(--line);
     color: var(--text); font-size: 20px; font-weight: 700;
     display: inline-flex; align-items: center; justify-content: center;
-    user-select: none; touch-action: none; cursor: pointer;
+    touch-action: none; cursor: pointer;
+    user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
+    -webkit-touch-callout: none;
     transition: transform .06s, border-color .06s, background .06s;
   }
+  .ptt, .ptt * { pointer-events: none; }
+  #pttBtn { pointer-events: auto; }
   .ptt small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; margin-top: 6px; }
   .ptt.active {
     background: radial-gradient(circle at 50% 40%, #ff9a4a, var(--accent));
@@ -265,6 +269,9 @@ function setupPTT() {
   btn.addEventListener("pointerup", stop);
   btn.addEventListener("pointercancel", stop);
   btn.addEventListener("pointerleave", stop);
+  // Kill the iOS long-press "copy / select" callout
+  btn.addEventListener("contextmenu", (e) => e.preventDefault());
+  btn.addEventListener("selectstart", (e) => e.preventDefault());
   // Spacebar for desktop testing
   window.addEventListener("keydown", (e) => { if (e.code === "Space" && !e.repeat) { e.preventDefault(); startTalk(); } });
   window.addEventListener("keyup", (e) => { if (e.code === "Space") { e.preventDefault(); stopTalk(); } });
