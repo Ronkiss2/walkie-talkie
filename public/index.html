@@ -1290,8 +1290,13 @@ function setupPTT() {
   btn.addEventListener("pointerleave", release);
   btn.addEventListener("contextmenu", (e) => e.preventDefault());
   btn.addEventListener("selectstart", (e) => e.preventDefault());
-  window.addEventListener("keydown", (e) => { if (e.code === "Space" && !e.repeat && talkMode === "ptt") { e.preventDefault(); setTransmitting(true); } });
-  window.addEventListener("keyup", (e) => { if (e.code === "Space" && talkMode === "ptt") { e.preventDefault(); setTransmitting(false); } });
+  // Spacebar = push-to-talk, but NOT while typing in a text field
+  const isTyping = (e) => {
+    const el = e.target;
+    return el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+  };
+  window.addEventListener("keydown", (e) => { if (e.code === "Space" && !e.repeat && talkMode === "ptt" && !isTyping(e)) { e.preventDefault(); setTransmitting(true); } });
+  window.addEventListener("keyup", (e) => { if (e.code === "Space" && talkMode === "ptt" && !isTyping(e)) { e.preventDefault(); setTransmitting(false); } });
 }
 
 function setTransmitting(on) {
