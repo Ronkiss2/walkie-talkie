@@ -73,7 +73,7 @@
     width: 220px; height: 220px; border-radius: 50%;
     background: radial-gradient(circle at 50% 40%, #1c2732, #0e141b);
     border: 3px solid var(--line);
-    color: var(--text); font-size: 20px; font-weight: 700;
+    color: var(--text); font-size: 72px;
     display: inline-flex; align-items: center; justify-content: center;
     touch-action: none; cursor: pointer;
     user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
@@ -82,12 +82,15 @@
   }
   .ptt, .ptt * { pointer-events: none; }
   #pttBtn { pointer-events: auto; }
-  .ptt small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .ptt-label {
+    margin-top: 18px; font-size: 20px; font-weight: 700; letter-spacing: .5px;
+    user-select: none; -webkit-user-select: none;
+  }
   .ptt.active {
     background: radial-gradient(circle at 50% 40%, #ff9a4a, var(--accent));
-    border-color: #ffd0a8; color: #111; transform: scale(0.97);
+    border-color: #ffd0a8; transform: scale(0.97);
   }
-  .ptt.active small { color: #5a2e00; }
+  .ptt-label.active { color: var(--accent); }
   .hint { color: var(--muted); font-size: 13px; margin-top: 14px; }
 </style>
 </head>
@@ -112,10 +115,8 @@
     <ul class="peers" id="peerList"></ul>
     <div class="status" id="status">Connecting…</div>
     <div class="ptt-wrap">
-      <div class="ptt" id="pttBtn">
-        HOLD TO TALK
-        <small>release to listen</small>
-      </div>
+      <div class="ptt" id="pttBtn">🎙️</div>
+      <div class="ptt-label" id="pttLabel">Hold to talk</div>
       <div class="hint" id="talkHint">Hold the button to broadcast to everyone in the channel.</div>
     </div>
   </section>
@@ -281,11 +282,15 @@ function startTalk() {
   if (!micTrack) return;
   micTrack.enabled = true;
   $("pttBtn").classList.add("active");
+  $("pttLabel").classList.add("active");
+  $("pttLabel").textContent = "Talking…";
 }
 function stopTalk() {
   if (!micTrack) return;
   micTrack.enabled = false;
   $("pttBtn").classList.remove("active");
+  $("pttLabel").classList.remove("active");
+  $("pttLabel").textContent = "Hold to talk";
 }
 
 // ---- "Who's talking" indicator ----
