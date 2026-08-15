@@ -85,6 +85,21 @@
   .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 10px 0; }
 
   .status { color: var(--muted); font-size: 14px; }
+
+  /* Text line */
+  .chat { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .messages {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 130px; overflow-y: auto; padding-right: 4px;
+  }
+  .msg { font-size: 14px; word-break: break-word; }
+  .msg .who { color: var(--accent); font-weight: 600; }
+  .msg.me .who { color: var(--muted); }
+  .msg .time { color: var(--muted); font-size: 11px; margin-left: 6px; }
+  .chat-input { display: flex; gap: 8px; }
+  .chat-input input { flex: 1; margin: 0; padding: 12px 14px; }
+  .chat-input .chip { padding: 0 18px; }
+
   .ptt-wrap { margin-top: auto; padding-bottom: 24px; text-align: center; }
   .mode {
     display: inline-flex; margin: 0 auto 16px; padding: 4px;
@@ -146,6 +161,13 @@
       </div>
     </div>
     <ul class="peers" id="peerList"></ul>
+    <div class="chat">
+      <div class="messages" id="messages"></div>
+      <form class="chat-input" id="chatForm">
+        <input id="chatText" placeholder="Type a message…" maxlength="300" autocomplete="off" />
+        <button type="submit" class="chip">Send</button>
+      </form>
+    </div>
     <div class="ptt-wrap">
       <div class="mode" id="modeToggle">
         <button class="mode-btn" data-mode="ptt">Push-to-talk</button>
@@ -231,6 +253,7 @@ async function join() {
   setupModeToggle();
   setupPTT();
   setupTopActions();
+  setupChat();
   updateTalkUI();
   renderPeers();
   connectSignaling(name, room);
@@ -326,10 +349,39 @@ function connectSignaling(name, room) {
     } else if (msg.type === "peer-left") {
       removePeer(msg.id);
       updateStatus();
+    } else if (msg.type === "chat") {
+      addMessage(msg.name || "Anon", msg.text, false);
+      playBeep();
+      if (navigator.vibrate) navigator.vibrate(40);
     }
   };
 }
 function signal(msg) { ws.send(JSON.stringify(msg)); }
+
+// ================= Text line =================
+function setupChat() {
+  $("chatForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = $("chatText").value.trim();
+    if (!text) return;
+    $("chatText").value = "";
+    addMessage(currentName, text, true);
+    if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: "chat", text }));
+  });
+}
+function addMessage(name, text, me) {
+  const box = $("messages");
+  const div = document.createElement("div");
+  div.className = "msg" + (me ? " me" : "");
+  const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const who = document.createElement("span"); who.className = "who"; who.textContent = (me ? "You" : name) + ": ";
+  const body = document.createElement("span"); body.textContent = text;
+  const t = document.createElement("span"); t.className = "time"; t.textContent = time;
+  div.append(who, body, t);
+  box.appendChild(div);
+  while (box.children.length > 50) box.removeChild(box.firstChild);
+  box.scrollTop = box.scrollHeight;
+}
 
 // ================= Peers =================
 function createPeer(id, name) {

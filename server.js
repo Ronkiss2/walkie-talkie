@@ -102,6 +102,14 @@ wss.on("connection", (ws) => {
       if (target) send(target, { ...msg, from: ws.peerId });
       return;
     }
+
+    // Broadcast a text message to everyone else in the room
+    if (msg.type === "chat") {
+      const text = String(msg.text || "").slice(0, 500).trim();
+      if (!text) return;
+      broadcast(ws.room, ws.peerId, { type: "chat", name: ws.name, text });
+      return;
+    }
   });
 
   ws.on("close", () => {
