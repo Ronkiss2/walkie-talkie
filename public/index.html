@@ -86,6 +86,26 @@
 
   .status { color: var(--muted); font-size: 14px; }
 
+  /* Now-talking banner */
+  .nowtalking {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 12px; font-size: 15px; font-weight: 600;
+    color: var(--muted); transition: border-color .15s, color .15s;
+  }
+  .nowtalking .live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .nowtalking.live { color: var(--text); border-color: var(--live); }
+  .nowtalking.live .live-dot { background: var(--live); box-shadow: 0 0 10px var(--live); animation: pulse 1s infinite; }
+  .nowtalking.me { border-color: var(--accent); }
+  .nowtalking.me .live-dot { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  /* VOX sensitivity slider (only shown in Voice mode) */
+  .vox-sens { display: none; align-items: center; gap: 10px; justify-content: center; margin-top: 16px; }
+  .vox-sens.show { display: flex; }
+  .vox-sens label { color: var(--muted); font-size: 13px; }
+  .vox-sens input[type=range] { width: 150px; accent-color: var(--accent); }
+
   /* Text line */
   .chat { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
   .messages {
@@ -133,6 +153,15 @@
   }
   .ptt-label.active { color: var(--accent); }
   .hint { color: var(--muted); font-size: 13px; margin-top: 14px; min-height: 18px; }
+
+  /* Toast (copy-link fallback) */
+  #toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
+    background: #000; color: #fff; padding: 12px 18px; border-radius: 999px;
+    font-size: 14px; max-width: 90vw; text-align: center; word-break: break-all;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 50;
+  }
+  #toast.show { opacity: .95; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -156,9 +185,13 @@
     <div class="topbar">
       <div class="status" id="status">Connecting…</div>
       <div class="top-actions">
+        <button class="chip" id="inviteBtn">📲 Invite</button>
         <button class="chip" id="replayBtn" disabled>🔁 Replay</button>
         <button class="chip" id="masterMuteBtn">🔊 Listening</button>
       </div>
+    </div>
+    <div class="nowtalking" id="nowTalking">
+      <span class="live-dot"></span><span id="nowTalkingText">Quiet — no one's talking</span>
     </div>
     <ul class="peers" id="peerList"></ul>
     <div class="chat">
@@ -177,6 +210,10 @@
       <div class="ptt" id="pttBtn">🎙️</div>
       <div class="ptt-label" id="pttLabel">Hold to talk</div>
       <div class="hint" id="talkHint">Hold the button to broadcast to everyone in the channel.</div>
+      <div class="vox-sens" id="voxSens">
+        <label for="voxSensSlider">VOX sensitivity</label>
+        <input type="range" min="0" max="100" id="voxSensSlider" />
+      </div>
     </div>
   </section>
 </main>
@@ -197,8 +234,11 @@ const ICE_SERVERS = [
   }
 ];
 const SPEAK_THRESH = 8;   // remote "is talking" sensitivity
-const VOX_THRESH = 14;    // local voice-activation sensitivity
+let VOX_THRESH = 14;      // local voice-activation threshold (tuned by the slider)
 const VOX_HANGOVER = 700; // ms of silence before VOX stops transmitting
+// Map a 0–100 "sensitivity" to a threshold: more sensitive = lower threshold
+const voxThreshFromSens = (s) => 30 - (s / 100) * 25;   // s=0 -> 30, s=100 -> 5
+const voxSensFromThresh = (t) => Math.round(((30 - t) / 25) * 100);
 
 // ================= State =================
 const $ = (id) => document.getElementById(id);
@@ -218,6 +258,13 @@ let ring, ringLen = 0, ringPos = 0, totalWritten = 0, recSampleRate = 48000;
 // Utterance tracking
 let inUtt = false, uttStart = 0, lastVoiceT = 0, loudestName = "", lastUtt = null;
 let voxRunning = false;
+let nowKey = "";
+
+// Restore saved VOX sensitivity
+{
+  const savedSens = localStorage.getItem("wt_voxsens");
+  if (savedSens !== null) VOX_THRESH = voxThreshFromSens(Number(savedSens));
+}
 
 // Register service worker (enables "Add to Home Screen")
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -226,7 +273,9 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 $("joinBtn").onclick = join;
 $("roomInput").addEventListener("keydown", (e) => { if (e.key === "Enter") join(); });
 $("nameInput").value = localStorage.getItem("wt_name") || "";
-$("roomInput").value = localStorage.getItem("wt_room") || "";
+// Prefill channel from an invite link (?c=channel), else from last used
+const inviteChannel = new URLSearchParams(location.search).get("c");
+$("roomInput").value = inviteChannel || localStorage.getItem("wt_room") || "";
 
 async function join() {
   const name = $("nameInput").value.trim() || "Anon";
@@ -254,6 +303,8 @@ async function join() {
   setupPTT();
   setupTopActions();
   setupChat();
+  setupInvite();
+  setupVoxSlider();
   updateTalkUI();
   renderPeers();
   connectSignaling(name, room);
@@ -525,6 +576,51 @@ function toggleMasterMute() {
   b.textContent = masterMuted ? "🔇 Muted" : "🔊 Listening";
 }
 
+// ================= Invite (share link with channel baked in) =================
+function setupInvite() {
+  $("inviteBtn").addEventListener("click", async () => {
+    const url = `${location.origin}/?c=${encodeURIComponent(currentRoom)}`;
+    const shareData = {
+      title: "Walkie",
+      text: `Join my walkie channel "${currentRoom}":`,
+      url
+    };
+    try {
+      if (navigator.share) { await navigator.share(shareData); return; }
+    } catch { return; } // user cancelled the share sheet
+    // Fallback: copy the link
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Invite link copied");
+    } catch {
+      toast(url);
+    }
+  });
+}
+
+function toast(msg) {
+  let t = $("toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+// ================= VOX sensitivity slider =================
+function setupVoxSlider() {
+  const slider = $("voxSensSlider");
+  slider.value = voxSensFromThresh(VOX_THRESH);
+  slider.addEventListener("input", () => {
+    VOX_THRESH = voxThreshFromSens(Number(slider.value));
+    localStorage.setItem("wt_voxsens", slider.value);
+  });
+}
+
 // ================= Mode + talk button =================
 function setupModeToggle() {
   document.querySelectorAll(".mode-btn").forEach((b) => {
@@ -574,6 +670,7 @@ function updateTalkUI() {
   }[talkMode];
   $("pttLabel").textContent = talking ? labels.live : labels.idle;
   $("talkHint").textContent = labels.hint;
+  $("voxSens").classList.toggle("show", talkMode === "vox");
 }
 
 // ================= VOX (voice-activated) =================
@@ -597,7 +694,8 @@ function voxTick() {
   requestAnimationFrame(voxTick);
 }
 
-// ================= Replay last message =================
+// ================= Now-talking banner + replay tracking =================
+let remoteVoiceT = 0;
 function monitorLoop() {
   let any = false, maxLvl = 0, name = "";
   for (const p of peers.values()) {
@@ -606,17 +704,29 @@ function monitorLoop() {
   }
   const now = performance.now();
   if (any) {
-    lastVoiceT = now;
+    remoteVoiceT = now;
     if (!inUtt) { inUtt = true; uttStart = totalWritten; }
     if (maxLvl > SPEAK_THRESH) loudestName = name;
-  } else if (inUtt && now - lastVoiceT > 600) {
+  } else if (inUtt && now - remoteVoiceT > 600) {
     inUtt = false;
     lastUtt = { start: uttStart, end: totalWritten, name: loudestName };
     const b = $("replayBtn");
     b.disabled = false;
     b.textContent = "🔁 Replay" + (loudestName ? " (" + loudestName + ")" : "");
   }
+  updateNowTalking(any ? name : null);
   requestAnimationFrame(monitorLoop);
+}
+
+function updateNowTalking(remoteName) {
+  let key, cls, text;
+  if (remoteName) { key = "r:" + remoteName; cls = "live"; text = remoteName + " is talking…"; }
+  else if (talking) { key = "me"; cls = "me"; text = "You're talking"; }
+  else { key = "quiet"; cls = ""; text = "Quiet — no one's talking"; }
+  if (key === nowKey) return;   // only touch the DOM when it actually changes
+  nowKey = key;
+  $("nowTalking").className = "nowtalking" + (cls ? " " + cls : "");
+  $("nowTalkingText").textContent = text;
 }
 
 function replayLast() {
