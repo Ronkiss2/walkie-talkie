@@ -2,9 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#0b0f14" />
 <title>Walkie</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/icon-180.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Walkie" />
 <style>
   :root {
     --bg: #0b0f14;
@@ -92,6 +98,17 @@
   }
   .ptt-label.active { color: var(--accent); }
   .hint { color: var(--muted); font-size: 13px; margin-top: 14px; }
+
+  /* Mode switch: push-to-talk vs hands-free */
+  .mode {
+    display: inline-flex; margin: 0 auto 4px; padding: 4px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  }
+  .mode-btn {
+    border: none; background: transparent; color: var(--muted);
+    padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .mode-btn.active { background: var(--accent); color: #111; }
 </style>
 </head>
 <body>
@@ -115,6 +132,10 @@
     <ul class="peers" id="peerList"></ul>
     <div class="status" id="status">Connecting…</div>
     <div class="ptt-wrap">
+      <div class="mode" id="modeToggle">
+        <button class="mode-btn" data-mode="ptt">Push-to-talk</button>
+        <button class="mode-btn" data-mode="hands">Hands-free</button>
+      </div>
       <div class="ptt" id="pttBtn">🎙️</div>
       <div class="ptt-label" id="pttLabel">Hold to talk</div>
       <div class="hint" id="talkHint">Hold the button to broadcast to everyone in the channel.</div>
@@ -142,7 +163,16 @@ const ICE_SERVERS = [
 
 const $ = (id) => document.getElementById(id);
 let ws, myId, localStream, micTrack;
-const peers = new Map(); // peerId -> { pc, name, audioEl, analyser, el }
+let talkMode = localStorage.getItem("wt_mode") || "ptt"; // "ptt" | "hands"
+let talking = false;
+let currentName = "", currentRoom = "", reconnectTimer = null, closingByUser = false;
+let wakeLock = null;
+const peers = new Map(); // peerId -> { pc, name, audioEl, analyser, el, lastAlert }
+
+// Register the service worker so the app can be installed to the home screen
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
 
 // ---- Join flow ----
 $("joinBtn").onclick = join;
@@ -176,16 +206,43 @@ async function join() {
   $("talkScreen").style.display = "flex";
   $("roomLabel").textContent = "#" + room.toLowerCase();
 
-  connectSignaling(name, room);
+  setupModeToggle();
   setupPTT();
+  updateTalkUI();
+  connectSignaling(name, room);
+  requestWakeLock();
 }
+
+// ---- Keep the screen awake so audio keeps flowing while the channel is open ----
+async function requestWakeLock() {
+  try {
+    if ("wakeLock" in navigator) {
+      wakeLock = await navigator.wakeLock.request("screen");
+    }
+  } catch {}
+}
+document.addEventListener("visibilitychange", () => {
+  // The OS drops the wake lock when you switch away — grab it again on return
+  if (document.visibilityState === "visible" && $("talkScreen").style.display === "flex") {
+    requestWakeLock();
+  }
+});
 
 // ---- Signaling ----
 function connectSignaling(name, room) {
+  currentName = name;
+  currentRoom = room;
   const proto = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(`${proto}://${location.host}`);
   ws.onopen = () => ws.send(JSON.stringify({ type: "join", room, name }));
-  ws.onclose = () => setStatus("Disconnected — refresh to rejoin");
+  ws.onclose = () => {
+    if (closingByUser) return;
+    // Connection dropped (Wi-Fi blip, server nap, network switch) — rebuild
+    setStatus("Reconnecting…");
+    for (const id of [...peers.keys()]) removePeer(id);
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(() => connectSignaling(currentName, currentRoom), 1500);
+  };
   ws.onmessage = async (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === "welcome") {
@@ -247,7 +304,7 @@ function createPeer(id, name) {
   el.innerHTML = `<span class="dot"></span><span>${escapeHtml(name)}</span>`;
   $("peerList").appendChild(el);
 
-  const peer = { pc, name, audioEl, el, analyser: null };
+  const peer = { pc, name, audioEl, el, analyser: null, wasSpeaking: false, lastAlert: 0 };
   peers.set(id, peer);
   return peer;
 }
@@ -261,36 +318,85 @@ function removePeer(id) {
   peers.delete(id);
 }
 
-// ---- Push to talk ----
+// ---- Mode switch (push-to-talk vs hands-free) ----
+function setupModeToggle() {
+  document.querySelectorAll(".mode-btn").forEach((b) => {
+    b.addEventListener("click", () => {
+      talkMode = b.dataset.mode;
+      localStorage.setItem("wt_mode", talkMode);
+      stopTalk();          // switching modes always ends any live transmission
+      updateTalkUI();
+    });
+  });
+  updateTalkUI();
+}
+
+// ---- Talk button ----
 function setupPTT() {
   const btn = $("pttBtn");
-  const start = (e) => { e.preventDefault(); startTalk(); };
-  const stop = (e) => { e.preventDefault(); stopTalk(); };
-  btn.addEventListener("pointerdown", start);
-  btn.addEventListener("pointerup", stop);
-  btn.addEventListener("pointercancel", stop);
-  btn.addEventListener("pointerleave", stop);
+  btn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (talkMode === "ptt") startTalk();
+    else toggleTalk();      // hands-free: tap on / tap off
+  });
+  const release = (e) => { e.preventDefault(); if (talkMode === "ptt") stopTalk(); };
+  btn.addEventListener("pointerup", release);
+  btn.addEventListener("pointercancel", release);
+  btn.addEventListener("pointerleave", release);
   // Kill the iOS long-press "copy / select" callout
   btn.addEventListener("contextmenu", (e) => e.preventDefault());
   btn.addEventListener("selectstart", (e) => e.preventDefault());
-  // Spacebar for desktop testing
-  window.addEventListener("keydown", (e) => { if (e.code === "Space" && !e.repeat) { e.preventDefault(); startTalk(); } });
-  window.addEventListener("keyup", (e) => { if (e.code === "Space") { e.preventDefault(); stopTalk(); } });
+  // Spacebar = push-to-talk on desktop
+  window.addEventListener("keydown", (e) => { if (e.code === "Space" && !e.repeat && talkMode === "ptt") { e.preventDefault(); startTalk(); } });
+  window.addEventListener("keyup", (e) => { if (e.code === "Space" && talkMode === "ptt") { e.preventDefault(); stopTalk(); } });
 }
 
+function toggleTalk() { talking ? stopTalk() : startTalk(); }
+
 function startTalk() {
-  if (!micTrack) return;
+  if (!micTrack || talking) return;
+  talking = true;
   micTrack.enabled = true;
-  $("pttBtn").classList.add("active");
-  $("pttLabel").classList.add("active");
-  $("pttLabel").textContent = "Talking…";
+  updateTalkUI();
 }
 function stopTalk() {
-  if (!micTrack) return;
+  if (!micTrack || !talking) { talking = false; if (micTrack) micTrack.enabled = false; updateTalkUI(); return; }
+  talking = false;
   micTrack.enabled = false;
-  $("pttBtn").classList.remove("active");
-  $("pttLabel").classList.remove("active");
-  $("pttLabel").textContent = "Hold to talk";
+  updateTalkUI();
+}
+
+// Reflect current mode + talking state in the button and labels
+function updateTalkUI() {
+  document.querySelectorAll(".mode-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.mode === talkMode));
+  $("pttBtn").classList.toggle("active", talking);
+  $("pttLabel").classList.toggle("active", talking);
+  if (talking) {
+    $("pttLabel").textContent = talkMode === "ptt" ? "Talking…" : "Talking — tap to stop";
+  } else {
+    $("pttLabel").textContent = talkMode === "ptt" ? "Hold to talk" : "Tap to talk";
+  }
+  $("talkHint").textContent = talkMode === "ptt"
+    ? "Hold the button to broadcast to everyone in the channel."
+    : "Tap to start talking, tap again to stop.";
+}
+
+// ---- Alert tone when someone starts talking ----
+function playBeep() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = "sine";
+    o.frequency.value = 680;
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.22, audioCtx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.16);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + 0.18);
+  } catch {}
 }
 
 // ---- "Who's talking" indicator ----
@@ -306,12 +412,25 @@ function watchSpeaking(id, stream) {
     const peer = peers.get(id);
     if (peer) peer.analyser = analyser;
     const tick = () => {
-      if (!peers.has(id)) return;
+      const peer = peers.get(id);
+      if (!peer) return;
       analyser.getByteFrequencyData(data);
       let sum = 0;
       for (const v of data) sum += v;
       const level = sum / data.length;
-      peers.get(id).el.classList.toggle("speaking", level > 8);
+      const speaking = level > 8;
+      peer.el.classList.toggle("speaking", speaking);
+
+      // Rising edge: someone just started talking -> alert (max once per 1.5s)
+      if (speaking && !peer.wasSpeaking) {
+        const now = Date.now();
+        if (now - peer.lastAlert > 1500) {
+          peer.lastAlert = now;
+          playBeep();
+          if (navigator.vibrate) navigator.vibrate(70); // Android; ignored on iOS
+        }
+      }
+      peer.wasSpeaking = speaking;
       requestAnimationFrame(tick);
     };
     tick();

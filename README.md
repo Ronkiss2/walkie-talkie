@@ -9,6 +9,15 @@ and hold a button to talk to everyone at once. Works on iPhone + Android, no app
 - **Private-ish:** anyone who knows the channel name can join it, so use a
   hard-to-guess name (e.g. `roadtrip-x7k2`).
 
+### Features
+- **Push-to-talk or hands-free** — switch modes with the toggle above the button.
+  PTT = hold to talk; hands-free = tap on / tap off.
+- **Talk alert** — a beep (and a buzz on Android) when someone starts talking, so
+  you notice with the phone in your pocket.
+- **Screen stays awake** while a channel is open, so audio doesn't cut out.
+- **Auto-reconnect** — if the network blips, it rejoins the channel on its own.
+- **Installable** — "Add to Home Screen" gives it an app icon and fullscreen view.
+
 ## Run it on your computer (for testing)
 
 ```bash
