@@ -1,0 +1,16 @@
+{
+  "name": "walkie-talkie",
+  "version": "1.0.0",
+  "description": "Free group push-to-talk (walkie talkie) over the internet using WebRTC",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

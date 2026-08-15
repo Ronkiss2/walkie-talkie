@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#0b0f14" />
+<title>Walkie</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #131a22;
+    --line: #223040;
+    --text: #e8eef5;
+    --muted: #7d8ea0;
+    --accent: #ff7a1a;
+    --live: #22c55e;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+  header {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { margin: 0; font-size: 18px; letter-spacing: .5px; }
+  header .room { color: var(--muted); font-size: 13px; }
+  main { flex: 1; padding: 18px; display: flex; flex-direction: column; }
+
+  /* Join screen */
+  .join { max-width: 380px; margin: auto; width: 100%; text-align: center; }
+  .join p { color: var(--muted); }
+  input {
+    width: 100%; padding: 14px 16px; margin: 8px 0;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; color: var(--text); font-size: 16px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  button.primary {
+    width: 100%; padding: 15px; margin-top: 10px;
+    background: var(--accent); color: #111; border: none;
+    border-radius: 12px; font-size: 17px; font-weight: 700; cursor: pointer;
+  }
+
+  /* Talk screen */
+  .talk { flex: 1; display: none; flex-direction: column; }
+  .peers {
+    list-style: none; padding: 0; margin: 0 0 12px;
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .peers li {
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 12px; border-radius: 20px; font-size: 14px;
+    display: flex; align-items: center; gap: 8px; transition: border-color .1s;
+  }
+  .peers li .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .peers li.speaking { border-color: var(--live); }
+  .peers li.speaking .dot { background: var(--live); box-shadow: 0 0 8px var(--live); }
+
+  .status { text-align: center; color: var(--muted); font-size: 14px; margin: 6px 0 18px; }
+  .ptt-wrap { margin-top: auto; padding-bottom: 24px; text-align: center; }
+  .ptt {
+    width: 220px; height: 220px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 40%, #1c2732, #0e141b);
+    border: 3px solid var(--line);
+    color: var(--text); font-size: 20px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    user-select: none; touch-action: none; cursor: pointer;
+    transition: transform .06s, border-color .06s, background .06s;
+  }
+  .ptt small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .ptt.active {
+    background: radial-gradient(circle at 50% 40%, #ff9a4a, var(--accent));
+    border-color: #ffd0a8; color: #111; transform: scale(0.97);
+  }
+  .ptt.active small { color: #5a2e00; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎙️ WALKIE</h1>
+  <span class="room" id="roomLabel"></span>
+</header>
+
+<main>
+  <!-- JOIN -->
+  <section class="join" id="joinScreen">
+    <p>Free group walkie-talkie. Share a channel name with friends — anyone who types the same name lands in the same channel.</p>
+    <input id="nameInput" placeholder="Your name" maxlength="24" autocomplete="off" />
+    <input id="roomInput" placeholder="Channel name (e.g. roadtrip)" maxlength="32" autocomplete="off" />
+    <button class="primary" id="joinBtn">Join channel</button>
+    <p class="hint" style="margin-top:20px">Works best over Wi-Fi or cell data on any phone. Uses your mic — you'll be asked for permission.</p>
+  </section>
+
+  <!-- TALK -->
+  <section class="talk" id="talkScreen">
+    <ul class="peers" id="peerList"></ul>
+    <div class="status" id="status">Connecting…</div>
+    <div class="ptt-wrap">
+      <div class="ptt" id="pttBtn">
+        HOLD TO TALK
+        <small>release to listen</small>
+      </div>
+      <div class="hint" id="talkHint">Hold the button to broadcast to everyone in the channel.</div>
+    </div>
+  </section>
+</main>
+
+<script>
+// ---- Connection config ----
+// STUN helps phones discover their public address. TURN relays audio when a
+// direct connection is blocked by a strict network (free public relay below).
+const ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  {
+    urls: [
+      "turn:openrelay.metered.ca:80",
+      "turn:openrelay.metered.ca:443",
+      "turn:openrelay.metered.ca:443?transport=tcp"
+    ],
+    username: "openrelayproject",
+    credential: "openrelayproject"
+  }
+];
+
+const $ = (id) => document.getElementById(id);
+let ws, myId, localStream, micTrack;
+const peers = new Map(); // peerId -> { pc, name, audioEl, analyser, el }
+
+// ---- Join flow ----
+$("joinBtn").onclick = join;
+$("roomInput").addEventListener("keydown", (e) => { if (e.key === "Enter") join(); });
+
+// Remember last used name/channel
+$("nameInput").value = localStorage.getItem("wt_name") || "";
+$("roomInput").value = localStorage.getItem("wt_room") || "";
+
+async function join() {
+  const name = $("nameInput").value.trim() || "Anon";
+  const room = $("roomInput").value.trim();
+  if (!room) { $("roomInput").focus(); return; }
+  localStorage.setItem("wt_name", name);
+  localStorage.setItem("wt_room", room);
+
+  // Get the mic (this tap is the user gesture that unlocks audio on iOS)
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false
+    });
+  } catch (err) {
+    alert("Microphone access is required to talk. Please allow it and try again.");
+    return;
+  }
+  micTrack = localStream.getAudioTracks()[0];
+  micTrack.enabled = false; // silent until you hold the button
+
+  $("joinScreen").style.display = "none";
+  $("talkScreen").style.display = "flex";
+  $("roomLabel").textContent = "#" + room.toLowerCase();
+
+  connectSignaling(name, room);
+  setupPTT();
+}
+
+// ---- Signaling ----
+function connectSignaling(name, room) {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}`);
+  ws.onopen = () => ws.send(JSON.stringify({ type: "join", room, name }));
+  ws.onclose = () => setStatus("Disconnected — refresh to rejoin");
+  ws.onmessage = async (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "welcome") {
+      myId = msg.id;
+      // We initiate a connection to everyone already in the room
+      for (const p of msg.peers) {
+        const pc = createPeer(p.id, p.name);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        signal({ type: "offer", target: p.id, sdp: offer });
+      }
+      updateStatus();
+    } else if (msg.type === "peer-joined") {
+      // Someone new joined — they will send US an offer, so just note them
+      if (!peers.has(msg.id)) createPeer(msg.id, msg.name);
+      updateStatus();
+    } else if (msg.type === "offer") {
+      const peer = peers.get(msg.from) || createPeer(msg.from, msg.name || "Anon");
+      await peer.pc.setRemoteDescription(msg.sdp);
+      const answer = await peer.pc.createAnswer();
+      await peer.pc.setLocalDescription(answer);
+      signal({ type: "answer", target: msg.from, sdp: answer });
+    } else if (msg.type === "answer") {
+      await peers.get(msg.from)?.pc.setRemoteDescription(msg.sdp);
+    } else if (msg.type === "ice") {
+      try { await peers.get(msg.from)?.pc.addIceCandidate(msg.candidate); } catch {}
+    } else if (msg.type === "peer-left") {
+      removePeer(msg.id);
+      updateStatus();
+    }
+  };
+}
+
+function signal(msg) { ws.send(JSON.stringify(msg)); }
+
+// ---- WebRTC peer (one per other person) ----
+function createPeer(id, name) {
+  if (peers.has(id)) return peers.get(id);
+
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  // Send our mic
+  localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+
+  pc.onicecandidate = (e) => {
+    if (e.candidate) signal({ type: "ice", target: id, candidate: e.candidate });
+  };
+
+  // Play their voice
+  const audioEl = new Audio();
+  audioEl.autoplay = true;
+  audioEl.playsInline = true;
+  pc.ontrack = (e) => {
+    audioEl.srcObject = e.streams[0];
+    audioEl.play().catch(() => {});
+    watchSpeaking(id, e.streams[0]);
+  };
+
+  const el = document.createElement("li");
+  el.innerHTML = `<span class="dot"></span><span>${escapeHtml(name)}</span>`;
+  $("peerList").appendChild(el);
+
+  const peer = { pc, name, audioEl, el, analyser: null };
+  peers.set(id, peer);
+  return peer;
+}
+
+function removePeer(id) {
+  const p = peers.get(id);
+  if (!p) return;
+  try { p.pc.close(); } catch {}
+  p.audioEl.srcObject = null;
+  p.el.remove();
+  peers.delete(id);
+}
+
+// ---- Push to talk ----
+function setupPTT() {
+  const btn = $("pttBtn");
+  const start = (e) => { e.preventDefault(); startTalk(); };
+  const stop = (e) => { e.preventDefault(); stopTalk(); };
+  btn.addEventListener("pointerdown", start);
+  btn.addEventListener("pointerup", stop);
+  btn.addEventListener("pointercancel", stop);
+  btn.addEventListener("pointerleave", stop);
+  // Spacebar for desktop testing
+  window.addEventListener("keydown", (e) => { if (e.code === "Space" && !e.repeat) { e.preventDefault(); startTalk(); } });
+  window.addEventListener("keyup", (e) => { if (e.code === "Space") { e.preventDefault(); stopTalk(); } });
+}
+
+function startTalk() {
+  if (!micTrack) return;
+  micTrack.enabled = true;
+  $("pttBtn").classList.add("active");
+}
+function stopTalk() {
+  if (!micTrack) return;
+  micTrack.enabled = false;
+  $("pttBtn").classList.remove("active");
+}
+
+// ---- "Who's talking" indicator ----
+let audioCtx;
+function watchSpeaking(id, stream) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const peer = peers.get(id);
+    if (peer) peer.analyser = analyser;
+    const tick = () => {
+      if (!peers.has(id)) return;
+      analyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (const v of data) sum += v;
+      const level = sum / data.length;
+      peers.get(id).el.classList.toggle("speaking", level > 8);
+      requestAnimationFrame(tick);
+    };
+    tick();
+  } catch {}
+}
+
+// ---- Status text ----
+function setStatus(t) { $("status").textContent = t; }
+function updateStatus() {
+  const n = peers.size;
+  setStatus(n === 0 ? "Waiting for others to join this channel…" : `${n} other${n === 1 ? "" : "s"} in the channel`);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+</script>
+</body>
+</html>

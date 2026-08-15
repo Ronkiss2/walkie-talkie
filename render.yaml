@@ -1,0 +1,12 @@
+# Render.com config — makes the deploy one-click ("Blueprint").
+# Render reads this automatically so you don't have to type build/start commands.
+services:
+  - type: web
+    name: walkie-talkie
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
