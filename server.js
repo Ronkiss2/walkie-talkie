@@ -47,6 +47,8 @@ const wss = new WebSocketServer({ server });
 
 // roomCode -> Map(peerId -> ws)
 const rooms = new Map();
+// roomCode -> topic string (so late joiners see the current channel topic)
+const roomTopics = new Map();
 
 function send(ws, msg) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
@@ -87,7 +89,7 @@ wss.on("connection", (ws) => {
       // Tell the newcomer who is already here (they'll initiate connections)
       const existing = [...peers.entries()].map(([id, sock]) => ({ id, name: sock.name }));
       peers.set(ws.peerId, ws);
-      send(ws, { type: "welcome", id: ws.peerId, peers: existing });
+      send(ws, { type: "welcome", id: ws.peerId, peers: existing, topic: roomTopics.get(room) || "" });
 
       // Tell everyone else someone joined
       broadcast(room, ws.peerId, { type: "peer-joined", id: ws.peerId, name });
@@ -125,6 +127,14 @@ wss.on("connection", (ws) => {
       broadcast(ws.room, ws.peerId, { type: "reaction", name: ws.name, emoji });
       return;
     }
+
+    // Set the channel topic (stored + shown to everyone, incl. late joiners)
+    if (msg.type === "topic") {
+      const text = String(msg.text || "").slice(0, 120).trim();
+      roomTopics.set(ws.room, text);
+      broadcast(ws.room, ws.peerId, { type: "topic", name: ws.name, text });
+      return;
+    }
   });
 
   ws.on("close", () => {
@@ -132,7 +142,7 @@ wss.on("connection", (ws) => {
     if (!peers) return;
     peers.delete(ws.peerId);
     broadcast(ws.room, ws.peerId, { type: "peer-left", id: ws.peerId });
-    if (peers.size === 0) rooms.delete(ws.room);
+    if (peers.size === 0) { rooms.delete(ws.room); roomTopics.delete(ws.room); }
   });
 });
 

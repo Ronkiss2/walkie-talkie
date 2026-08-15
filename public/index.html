@@ -21,6 +21,14 @@
     --accent: #ff7a1a;
     --live: #22c55e;
   }
+  :root[data-theme="light"] {
+    --bg: #f3f6fa;
+    --panel: #ffffff;
+    --line: #d6dee8;
+    --text: #0e141b;
+    --muted: #5a6b7b;
+    --live: #16a34a;
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; }
   body {
@@ -40,8 +48,90 @@
     justify-content: space-between;
   }
   header h1 { margin: 0; font-size: 18px; letter-spacing: .5px; }
+  header .head-right { display: flex; align-items: center; gap: 10px; }
   header .room { color: var(--muted); font-size: 13px; }
+  .theme-toggle {
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    width: 38px; height: 38px; border-radius: 50%; font-size: 18px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
   main { flex: 1; padding: 18px; display: flex; flex-direction: column; }
+
+  .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+  .swatch {
+    width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; background: var(--sw);
+  }
+  .swatch.sel { border-color: var(--text); }
+
+  /* Settings sheet */
+  .sheet-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 60;
+    display: none; align-items: flex-end; justify-content: center;
+  }
+  .sheet-backdrop.show { display: flex; }
+  .sheet {
+    background: var(--bg); border: 1px solid var(--line); border-bottom: none;
+    border-radius: 18px 18px 0 0; width: 100%; max-width: 520px;
+    max-height: 85vh; overflow-y: auto; padding: 18px 18px 32px;
+  }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .sheet-head h2 { margin: 0; font-size: 18px; }
+  .sheet-close {
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    width: 34px; height: 34px; border-radius: 50%; font-size: 15px; cursor: pointer;
+  }
+  .set-group { padding: 14px 0; border-top: 1px solid var(--line); }
+  .set-label { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .set-sub { opacity: .7; font-weight: 400; }
+  .seg { display: inline-flex; gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .seg.wrap { display: flex; flex-wrap: wrap; }
+  .seg button {
+    border: none; background: transparent; color: var(--muted);
+    padding: 8px 14px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .seg button.sel { background: var(--accent); color: #111; }
+  .bg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .bg-opt {
+    border: 2px solid var(--line); color: var(--text); border-radius: 10px;
+    padding: 14px 6px; font-size: 12px; font-weight: 600; cursor: pointer; background-size: cover;
+  }
+  .bg-opt.sel { border-color: var(--accent); }
+  .set-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 0; font-size: 14px;
+  }
+  .set-row input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
+
+  /* Background presets (applied to <body>) */
+  body[data-bg="midnight"] { background: linear-gradient(160deg, #0b0f14 0%, #16203c 100%) fixed; }
+  body[data-bg="sunset"]   { background: linear-gradient(160deg, #2a1224 0%, #542a1c 55%, #140f16 100%) fixed; }
+  body[data-bg="ocean"]    { background: linear-gradient(160deg, #06131f 0%, #0e3b49 100%) fixed; }
+  body[data-bg="forest"]   { background: linear-gradient(160deg, #0a1a12 0%, #123227 100%) fixed; }
+  body[data-bg="mono"]     { background: #000; }
+  .bg-opt[data-bg="none"]     { background: var(--panel); }
+  .bg-opt[data-bg="midnight"] { background: linear-gradient(160deg, #0b0f14, #16203c); color: #fff; }
+  .bg-opt[data-bg="sunset"]   { background: linear-gradient(160deg, #2a1224, #542a1c); color: #fff; }
+  .bg-opt[data-bg="ocean"]    { background: linear-gradient(160deg, #06131f, #0e3b49); color: #fff; }
+  .bg-opt[data-bg="forest"]   { background: linear-gradient(160deg, #0a1a12, #123227); color: #fff; }
+  .bg-opt[data-bg="mono"]     { background: #000; color: #fff; }
+
+  /* Channel topic (pinned note) */
+  .topic {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px;
+  }
+  .topic .pin { flex: none; }
+  .topic #topicText { flex: 1; }
+  .topic.empty { color: var(--muted); }
+  .topic input {
+    flex: 1; margin: 0; padding: 6px 8px; font-size: 14px;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px; color: var(--text);
+  }
 
   /* Join screen */
   .join { max-width: 380px; margin: auto; width: 100%; text-align: center; }
@@ -196,7 +286,10 @@
 <body>
 <header>
   <h1>🎙️ WALKIE</h1>
-  <span class="room" id="roomLabel"></span>
+  <div class="head-right">
+    <span class="room" id="roomLabel"></span>
+    <button class="theme-toggle" id="settingsBtn" title="Settings">⚙️</button>
+  </div>
 </header>
 
 <main>
@@ -215,11 +308,12 @@
       <div class="status" id="status">Connecting…</div>
       <div class="top-actions">
         <button class="chip" id="inviteBtn">📲 Invite</button>
-        <button class="chip" id="radioBtn">📻 Radio</button>
-        <button class="chip" id="captionsBtn">📝 Captions</button>
         <button class="chip" id="replayBtn" disabled>🔁 Replay</button>
         <button class="chip" id="masterMuteBtn">🔊 Listening</button>
       </div>
+    </div>
+    <div class="topic empty" id="topicBar">
+      <span class="pin">📌</span><span id="topicText">Set a channel topic…</span>
     </div>
     <div class="nowtalking" id="nowTalking">
       <span class="live-dot"></span><span id="nowTalkingText">Quiet — no one's talking</span>
@@ -256,6 +350,70 @@
     </div>
     <div id="reactionLayer"></div>
   </section>
+
+  <!-- SETTINGS SHEET -->
+  <div class="sheet-backdrop" id="settingsSheet">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>Settings</h2>
+        <button class="sheet-close" id="settingsClose">✕</button>
+      </div>
+
+      <div class="set-group">
+        <div class="set-label">Theme</div>
+        <div class="seg" id="themeSeg">
+          <button data-theme="dark">🌙 Dark</button>
+          <button data-theme="light">☀️ Light</button>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-label">Accent color</div>
+        <div class="swatches" id="swatches">
+          <span class="swatch" data-accent="#ff7a1a" style="--sw:#ff7a1a"></span>
+          <span class="swatch" data-accent="#22c55e" style="--sw:#22c55e"></span>
+          <span class="swatch" data-accent="#3b82f6" style="--sw:#3b82f6"></span>
+          <span class="swatch" data-accent="#a855f7" style="--sw:#a855f7"></span>
+          <span class="swatch" data-accent="#ec4899" style="--sw:#ec4899"></span>
+          <span class="swatch" data-accent="#eab308" style="--sw:#eab308"></span>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-label">Background</div>
+        <div class="bg-grid" id="bgGrid">
+          <button data-bg="none" class="bg-opt">Plain</button>
+          <button data-bg="midnight" class="bg-opt">Midnight</button>
+          <button data-bg="sunset" class="bg-opt">Sunset</button>
+          <button data-bg="ocean" class="bg-opt">Ocean</button>
+          <button data-bg="forest" class="bg-opt">Forest</button>
+          <button data-bg="mono" class="bg-opt">Mono</button>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-label">Voice changer <span class="set-sub">(how you sound to others)</span></div>
+        <div class="seg wrap" id="voiceFxSeg">
+          <button data-fx="none">None</button>
+          <button data-fx="robot">🤖 Robot</button>
+          <button data-fx="alien">👽 Alien</button>
+          <button data-fx="megaphone">📣 Megaphone</button>
+          <button data-fx="phone">☎️ Telephone</button>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <label class="set-row"><span>📻 Radio filter <span class="set-sub">(how others sound to you)</span></span>
+          <input type="checkbox" id="radioChk" /></label>
+        <label class="set-row"><span>📝 Live captions <span class="set-sub">(speech-to-text)</span></span>
+          <input type="checkbox" id="captionsChk" /></label>
+        <label class="set-row"><span>🗣️ Read chat aloud</span>
+          <input type="checkbox" id="readAloudChk" /></label>
+        <label class="set-row"><span>🔔 Join / leave chirps</span>
+          <input type="checkbox" id="chirpChk" checked /></label>
+      </div>
+    </div>
+  </div>
 </main>
 
 <script>
@@ -295,8 +453,12 @@ let ctx, masterGain, remoteMix, outStream, outTrack;
 let voiceBus, radioIn;
 let radioOn = localStorage.getItem("wt_radio") === "1";
 let micSource, micGain, micAnalyser;
-// Live captions
+// Voice changer (outgoing effect)
+let fxIn, fxOut, fxNodes = [], currentFx = localStorage.getItem("wt_voicefx") || "none";
+// Live captions / read-aloud / chirps
 let recognition = null, captionsOn = false, lastCaptionSent = 0, captionHideTimer = null;
+let readAloud = localStorage.getItem("wt_readaloud") === "1";
+let chirpsOn = localStorage.getItem("wt_chirp") !== "0";
 // Rolling recorder (for replay)
 let ring, ringLen = 0, ringPos = 0, totalWritten = 0, recSampleRate = 48000;
 // Utterance tracking
@@ -349,9 +511,8 @@ async function join() {
   setupChat();
   setupInvite();
   setupVoxSlider();
-  setupRadio();
-  setupCaptions();
   setupReactions();
+  setupTopic();
   updateTalkUI();
   renderPeers();
   connectSignaling(name, room);
@@ -406,16 +567,75 @@ function buildLocalAudio() {
   ensureCtx();
   ctx.resume();
   micSource = ctx.createMediaStreamSource(localStream);
+  // Voice-changer insert point: micSource -> fxIn -> [effect] -> fxOut -> micGain(gate) -> out
+  fxIn = ctx.createGain();
+  fxOut = ctx.createGain();
   micGain = ctx.createGain();
   micGain.gain.value = 0; // silent until we transmit
   const dest = ctx.createMediaStreamDestination();
-  micSource.connect(micGain);
+  micSource.connect(fxIn);
+  fxOut.connect(micGain);
   micGain.connect(dest);
   micAnalyser = ctx.createAnalyser();
   micAnalyser.fftSize = 512;
-  micSource.connect(micAnalyser);
+  micSource.connect(micAnalyser);   // VOX taps the raw voice (pre-effect)
   outStream = dest.stream;
   outTrack = outStream.getAudioTracks()[0];
+  applyVoiceFx(currentFx);          // wire the selected effect between fxIn and fxOut
+}
+
+// Rebuild the voice-changer effect between fxIn and fxOut
+function applyVoiceFx(name) {
+  currentFx = name;
+  if (!fxIn || !fxOut) return; // mic not built yet; will apply in buildLocalAudio
+  // Tear down previous effect nodes
+  try { fxIn.disconnect(); } catch {}
+  for (const n of fxNodes) { try { n.stop && n.stop(); } catch {} try { n.disconnect(); } catch {} }
+  fxNodes = [];
+
+  if (name === "none") { fxIn.connect(fxOut); return; }
+
+  if (name === "robot" || name === "alien") {
+    // Ring modulation: multiply the voice by an oscillator
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = name === "robot" ? 50 : 340;
+    const ring = ctx.createGain();
+    ring.gain.value = 0;
+    osc.connect(ring.gain);
+    fxIn.connect(ring);
+    if (name === "alien") {
+      const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1500; bp.Q.value = 0.8;
+      ring.connect(bp); bp.connect(fxOut); fxNodes.push(bp);
+    } else {
+      ring.connect(fxOut);
+    }
+    osc.start();
+    fxNodes.push(osc, ring);
+    return;
+  }
+
+  if (name === "megaphone") {
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 700;
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
+    const shaper = ctx.createWaveShaper();
+    const n = 256, c = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(x * 4); }
+    shaper.curve = c;
+    fxIn.connect(hp); hp.connect(lp); lp.connect(shaper); shaper.connect(fxOut);
+    fxNodes.push(hp, lp, shaper);
+    return;
+  }
+
+  if (name === "phone") {
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 350;
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3400;
+    fxIn.connect(hp); hp.connect(lp); lp.connect(fxOut);
+    fxNodes.push(hp, lp);
+    return;
+  }
+
+  fxIn.connect(fxOut); // fallback
 }
 
 function initRecorder() {
@@ -460,6 +680,7 @@ function connectSignaling(name, room) {
         await peer.pc.setLocalDescription(offer);
         signal({ type: "offer", target: p.id, sdp: offer });
       }
+      if (msg.topic) showTopic(msg.topic);
       updateStatus();
     } else if (msg.type === "peer-joined") {
       if (!peers.has(msg.id)) createPeer(msg.id, msg.name);
@@ -483,6 +704,9 @@ function connectSignaling(name, room) {
       addMessage(msg.name || "Anon", msg.text, false);
       playBeep();
       if (navigator.vibrate) navigator.vibrate(40);
+      if (readAloud) speakAloud(`${msg.name || "Someone"} says: ${msg.text}`);
+    } else if (msg.type === "topic") {
+      showTopic(msg.text, msg.name);
     } else if (msg.type === "caption") {
       showCaption(msg.name || "Anon", msg.text, msg.final);
     } else if (msg.type === "reaction") {
@@ -703,41 +927,23 @@ function setupVoxSlider() {
   });
 }
 
-// ================= Radio voice filter =================
-function setupRadio() {
-  const b = $("radioBtn");
-  b.classList.toggle("on", radioOn);
-  b.addEventListener("click", () => {
-    radioOn = !radioOn;
-    localStorage.setItem("wt_radio", radioOn ? "1" : "0");
-    b.classList.toggle("on", radioOn);
-    if (ctx) routeVoiceBus();
-  });
-}
-
 // ================= Live captions (speech-to-text) =================
-function setupCaptions() {
-  const b = $("captionsBtn");
+function startCaptions() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  b.addEventListener("click", () => {
-    if (captionsOn) { stopCaptions(); return; }
-    if (!SR) { toast("Captions aren't supported in this browser (try Chrome)."); return; }
-    captionsOn = true;
-    b.classList.add("on");
-    recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = navigator.language || "en-US";
-    recognition.onresult = onCaptionResult;
-    recognition.onend = () => { if (captionsOn) { try { recognition.start(); } catch {} } };
-    recognition.onerror = () => {};
-    try { recognition.start(); } catch {}
-    toast("Captions on — others will see what you say");
-  });
+  if (!SR) { toast("Captions aren't supported in this browser (try Chrome)."); $("captionsChk").checked = false; return; }
+  captionsOn = true;
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = navigator.language || "en-US";
+  recognition.onresult = onCaptionResult;
+  recognition.onend = () => { if (captionsOn) { try { recognition.start(); } catch {} } };
+  recognition.onerror = () => {};
+  try { recognition.start(); } catch {}
+  toast("Captions on — others will see what you say");
 }
 function stopCaptions() {
   captionsOn = false;
-  $("captionsBtn").classList.remove("on");
   if (recognition) { recognition.onend = null; try { recognition.stop(); } catch {} recognition = null; }
 }
 function onCaptionResult(e) {
@@ -789,6 +995,7 @@ function showReaction(name, emoji) {
 
 // ================= Join / leave chirps =================
 function playChirp(up) {
+  if (!chirpsOn) return;
   try {
     ensureCtx();
     const o = ctx.createOscillator();
@@ -803,6 +1010,127 @@ function playChirp(up) {
     o.connect(g); g.connect(ctx.destination);
     o.start(t); o.stop(t + 0.2);
   } catch {}
+}
+
+// ================= Channel topic (pinned note) =================
+function setupTopic() {
+  $("topicBar").addEventListener("click", editTopic);
+}
+function editTopic() {
+  const bar = $("topicBar");
+  if (bar.querySelector("input")) return;
+  const current = bar.classList.contains("empty") ? "" : $("topicText").textContent;
+  bar.innerHTML = `<span class="pin">📌</span>`;
+  const input = document.createElement("input");
+  input.maxLength = 120;
+  input.value = current;
+  input.placeholder = "Channel topic (everyone sees this)";
+  bar.appendChild(input);
+  input.focus();
+  const commit = () => {
+    const text = input.value.trim();
+    showTopic(text);
+    if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: "topic", text }));
+  };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
+  input.addEventListener("blur", commit);
+}
+function showTopic(text, byName) {
+  const bar = $("topicBar");
+  bar.classList.toggle("empty", !text);
+  bar.innerHTML = `<span class="pin">📌</span><span id="topicText"></span>`;
+  $("topicText").textContent = text || "Set a channel topic…";
+  if (text && byName) toast(`${byName} set the topic`);
+}
+
+// ================= Read chat aloud =================
+function speakAloud(text) {
+  try {
+    if (!("speechSynthesis" in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1; u.pitch = 1;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+
+// ================= Settings sheet =================
+function initSettings() {
+  // Open / close
+  $("settingsBtn").addEventListener("click", () => $("settingsSheet").classList.add("show"));
+  $("settingsClose").addEventListener("click", () => $("settingsSheet").classList.remove("show"));
+  $("settingsSheet").addEventListener("click", (e) => { if (e.target.id === "settingsSheet") $("settingsSheet").classList.remove("show"); });
+
+  // Theme
+  document.querySelectorAll("#themeSeg button").forEach((b) =>
+    b.addEventListener("click", () => applyTheme(b.dataset.theme)));
+  // Accent
+  document.querySelectorAll("#swatches .swatch").forEach((s) =>
+    s.addEventListener("click", () => applyAccent(s.dataset.accent)));
+  // Background
+  document.querySelectorAll("#bgGrid .bg-opt").forEach((b) =>
+    b.addEventListener("click", () => applyBackground(b.dataset.bg)));
+  // Voice changer
+  document.querySelectorAll("#voiceFxSeg button").forEach((b) =>
+    b.addEventListener("click", () => {
+      localStorage.setItem("wt_voicefx", b.dataset.fx);
+      applyVoiceFx(b.dataset.fx);
+      markSeg("#voiceFxSeg", "fx", b.dataset.fx);
+    }));
+
+  // Toggles
+  const radioChk = $("radioChk");
+  radioChk.checked = radioOn;
+  radioChk.addEventListener("change", () => {
+    radioOn = radioChk.checked;
+    localStorage.setItem("wt_radio", radioOn ? "1" : "0");
+    if (ctx) routeVoiceBus();
+  });
+
+  const capChk = $("captionsChk");
+  capChk.addEventListener("change", () => { capChk.checked ? startCaptions() : stopCaptions(); });
+
+  const raChk = $("readAloudChk");
+  raChk.checked = readAloud;
+  raChk.addEventListener("change", () => {
+    readAloud = raChk.checked;
+    localStorage.setItem("wt_readaloud", readAloud ? "1" : "0");
+  });
+
+  const chirpChk = $("chirpChk");
+  chirpChk.checked = chirpsOn;
+  chirpChk.addEventListener("change", () => {
+    chirpsOn = chirpChk.checked;
+    localStorage.setItem("wt_chirp", chirpsOn ? "1" : "0");
+  });
+
+  // Apply saved appearance + reflect current selections
+  applyTheme(localStorage.getItem("wt_theme") || "dark");
+  applyAccent(localStorage.getItem("wt_accent") || "#ff7a1a");
+  applyBackground(localStorage.getItem("wt_bg") || "none");
+  markSeg("#voiceFxSeg", "fx", currentFx);
+}
+function markSeg(sel, attr, val) {
+  document.querySelectorAll(`${sel} button`).forEach((b) =>
+    b.classList.toggle("sel", b.dataset[attr] === val));
+}
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem("wt_theme", t);
+  document.querySelector('meta[name="theme-color"]').setAttribute("content", t === "light" ? "#f3f6fa" : "#0b0f14");
+  markSeg("#themeSeg", "theme", t);
+}
+function applyAccent(c) {
+  document.documentElement.style.setProperty("--accent", c);
+  localStorage.setItem("wt_accent", c);
+  document.querySelectorAll("#swatches .swatch").forEach((s) =>
+    s.classList.toggle("sel", s.dataset.accent === c));
+}
+function applyBackground(bg) {
+  if (bg === "none") document.body.removeAttribute("data-bg");
+  else document.body.dataset.bg = bg;
+  localStorage.setItem("wt_bg", bg);
+  document.querySelectorAll("#bgGrid .bg-opt").forEach((b) =>
+    b.classList.toggle("sel", b.dataset.bg === bg));
 }
 
 // ================= Mode + talk button =================
@@ -968,6 +1296,9 @@ function updateStatus() {
   const n = peers.size;
   setStatus(n === 0 ? "Waiting for others…" : `${n} other${n === 1 ? "" : "s"} in the channel`);
 }
+
+// Apply saved appearance + wire the settings sheet immediately (before joining)
+initSettings();
 </script>
 </body>
 </html>

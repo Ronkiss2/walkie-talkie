@@ -29,6 +29,11 @@ and hold a button to talk to everyone at once. Works on iPhone + Android, no app
   falls back gracefully where the browser lacks speech recognition).
 - **Emoji reactions** and **join/leave chirps** for quick, silent signals.
 - **One-tap invite** — shares a link with the channel baked in (`/?c=<channel>`).
+- **Settings sheet** (⚙️): light/dark theme, accent color, background presets, a
+  **voice changer** (robot / alien / megaphone / telephone — changes how *you*
+  sound to others), radio filter, captions, read-aloud, and chirp toggles.
+- **Channel topic** — a pinned note everyone sees, kept for people who join later.
+- **Read chat aloud** — incoming texts spoken via the device's text-to-speech.
 
 ## Run it on your computer (for testing)
 
