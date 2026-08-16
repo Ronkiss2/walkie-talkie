@@ -134,6 +134,19 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    // Spotting command (directional signal) + acknowledgement
+    if (msg.type === "command") {
+      const cmd = String(msg.cmd || "").slice(0, 16);
+      if (!cmd) return;
+      broadcast(ws.room, ws.peerId, { type: "command", cmd, name: ws.name });
+      return;
+    }
+    if (msg.type === "ack") {
+      const cmd = String(msg.cmd || "").slice(0, 16);
+      broadcast(ws.room, ws.peerId, { type: "ack", cmd, name: ws.name });
+      return;
+    }
+
     // Set the channel topic (stored + shown to everyone, incl. late joiners)
     if (msg.type === "topic") {
       const text = String(msg.text || "").slice(0, 120).trim();

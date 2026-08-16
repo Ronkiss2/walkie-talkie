@@ -38,6 +38,13 @@ and hold a button to talk to everyone at once. Works on iPhone + Android, no app
   red flashing warning, and a strong vibration on everyone's phone. Built for
   safety-critical "stop now" moments (e.g. spotting heavy equipment). The alarm
   bypasses the listener's master-mute; note it can't override a phone set to silent.
+- **Spotting commands** (work channels) — one-tap directional signals (COME AHEAD,
+  BACK UP, SWING LEFT/RIGHT, SLOW, ALL CLEAR) that flash big + play a distinct tone
+  and are spoken aloud, for directing equipment over engine noise.
+- **Operator cab mode** — a giant, glanceable full-screen showing just the current
+  command, for a phone mounted in the cab.
+- **Acknowledge (Copy)** — the operator taps once to confirm a command was received,
+  and the spotter gets a "copied" confirmation.
 - **Channel topic** — a pinned note everyone sees, kept for people who join later.
 - **Read chat aloud** — incoming texts spoken via the device's text-to-speech.
 

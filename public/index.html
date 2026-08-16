@@ -166,6 +166,50 @@
   .alert-btn:active { transform: scale(.98); }
   .alert-btn.sent { background: #7a1010; }
 
+  /* Work spotting toolbar (only shown on work channels) */
+  #workTools { display: none; margin-bottom: 12px; }
+  #workTools.show { display: block; }
+  .cmd-bar {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 14px; margin-bottom: 10px; text-align: center;
+    font-size: 22px; font-weight: 800; color: var(--text); transition: background .15s;
+  }
+  .cmd-bar.active { color: #fff; border-color: transparent; }
+  .spot-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .spot-grid button {
+    padding: 16px 8px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--panel); color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  .spot-grid button:active { transform: scale(.97); }
+  .work-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .work-actions .chip { flex: 1; text-align: center; padding: 12px; }
+
+  /* Operator cab mode — giant glanceable full screen */
+  #cabOverlay {
+    display: none; position: fixed; inset: 0; z-index: 85;
+    flex-direction: column; align-items: center; justify-content: center;
+    background: #0b0f14; padding: calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
+    text-align: center;
+  }
+  #cabOverlay.show { display: flex; }
+  #cabExit {
+    position: absolute; top: calc(14px + env(safe-area-inset-top)); right: 16px;
+    background: rgba(255,255,255,.12); color: #fff; border: none;
+    padding: 10px 16px; border-radius: 999px; font-size: 15px; cursor: pointer;
+  }
+  .cab-cmd {
+    color: #fff; font-weight: 900; line-height: 1.05; letter-spacing: 1px;
+    font-size: clamp(48px, 16vw, 140px); margin: auto 0 10px; padding: 20px;
+    border-radius: 20px; width: 100%; transition: background .15s;
+  }
+  .cab-from { color: rgba(255,255,255,.7); font-size: 18px; margin-bottom: auto; }
+  .cab-copy {
+    width: 100%; max-width: 460px; padding: 26px; margin-top: 12px;
+    background: #16a34a; color: #fff; border: none; border-radius: 16px;
+    font-size: 26px; font-weight: 800; cursor: pointer;
+  }
+  .cab-copy.done { background: #444; }
+
   /* Full-screen alert overlay (receiver) */
   #alertOverlay {
     display: none; position: fixed; inset: 0; z-index: 90;
@@ -384,6 +428,21 @@
       </div>
     </div>
     <button type="button" class="alert-btn" id="alertBtn">🛑 STOP / ALERT — tap to warn everyone</button>
+    <div id="workTools">
+      <div class="cmd-bar" id="cmdBar">No command yet</div>
+      <div class="spot-grid" id="spotGrid">
+        <button type="button" data-cmd="come">⬇️ COME AHEAD</button>
+        <button type="button" data-cmd="back">⬆️ BACK UP</button>
+        <button type="button" data-cmd="left">⬅️ SWING LEFT</button>
+        <button type="button" data-cmd="right">➡️ SWING RIGHT</button>
+        <button type="button" data-cmd="slow">🐢 SLOW</button>
+        <button type="button" data-cmd="clear">✅ ALL CLEAR</button>
+      </div>
+      <div class="work-actions">
+        <button type="button" class="chip" id="ackBtn">✓ Copy last</button>
+        <button type="button" class="chip" id="cabBtn">📺 Cab mode</button>
+      </div>
+    </div>
     <div class="topic empty" id="topicBar">
       <span class="pin">📌</span><span id="topicText">Set a channel topic…</span>
     </div>
@@ -513,6 +572,14 @@
     </div>
   </div>
 
+  <!-- OPERATOR CAB MODE (giant glanceable command display) -->
+  <div id="cabOverlay">
+    <button type="button" id="cabExit">✕ Exit</button>
+    <div class="cab-cmd" id="cabCmd">Waiting for signal…</div>
+    <div class="cab-from" id="cabFrom"></div>
+    <button type="button" class="cab-copy" id="cabCopy">✓ COPY</button>
+  </div>
+
   <!-- EMERGENCY ALERT OVERLAY -->
   <div id="alertOverlay">
     <div class="alert-box">
@@ -572,8 +639,18 @@ let recognition = null, captionsOn = false, lastCaptionSent = 0, captionHideTime
 let readAloud = localStorage.getItem("wt_readaloud") === "1";
 let chirpsOn = localStorage.getItem("wt_chirp") !== "0";
 let announceJoins = localStorage.getItem("wt_announce") === "1";
-let currentChannelType = "casual";   // "work" channels show the STOP/ALERT button
+let currentChannelType = "casual";   // "work" channels show the STOP/ALERT + spotting tools
 let alarmNodes = [], alertCooldown = 0;
+let currentCmd = null;                // last spotting command shown (for Copy/ack)
+// Spotting commands: label, icon, color, alert tone
+const CMDS = {
+  come:  { label: "COME AHEAD",  color: "#16a34a", tone: 660 },
+  back:  { label: "BACK UP",     color: "#2563eb", tone: 520 },
+  left:  { label: "SWING LEFT",  color: "#d9822b", tone: 590 },
+  right: { label: "SWING RIGHT", color: "#b45309", tone: 730 },
+  slow:  { label: "SLOW",        color: "#ca8a04", tone: 440 },
+  clear: { label: "ALL CLEAR",   color: "#15803d", tone: 880 }
+};
 // Rolling recorder (for replay)
 let ring, ringLen = 0, ringPos = 0, totalWritten = 0, recSampleRate = 48000;
 // Utterance tracking
@@ -834,6 +911,10 @@ function connectSignaling(name, room) {
       showTopic(msg.text, msg.name);
     } else if (msg.type === "alert") {
       showAlert(msg.name || "Someone");
+    } else if (msg.type === "command") {
+      showCommand(msg.cmd, msg.name || "Spotter");
+    } else if (msg.type === "ack") {
+      showAck(msg.name || "Someone", msg.cmd);
     } else if (msg.type === "caption") {
       showCaption(msg.name || "Anon", msg.text, msg.final);
     } else if (msg.type === "reaction") {
@@ -1350,8 +1431,9 @@ function initChannels() {
 // ================= Emergency STOP / ALERT =================
 function updateAlertVisibility() {
   const work = currentChannelType === "work";
-  // Work channels: show the STOP button, hide the casual/fun bits (emoji reactions)
+  // Work channels: show the STOP button + spotting tools, hide casual bits (emoji reactions)
   $("alertBtn").classList.toggle("show", work);
+  $("workTools").classList.toggle("show", work);
   $("reactions").style.display = work ? "none" : "";
 }
 function setupAlert() {
@@ -1406,6 +1488,72 @@ function playAlarm() {
 function stopAlarm() {
   for (const n of alarmNodes) { try { n.stop && n.stop(); } catch {} try { n.disconnect(); } catch {} }
   alarmNodes = [];
+}
+
+// ================= Spotting commands + cab mode + acknowledge =================
+function setupWork() {
+  document.querySelectorAll("#spotGrid button").forEach((b) =>
+    b.addEventListener("click", () => sendCommand(b.dataset.cmd)));
+  $("ackBtn").addEventListener("click", sendAck);
+  $("cabBtn").addEventListener("click", () => { $("cabOverlay").classList.add("show"); requestWakeLock(); });
+  $("cabExit").addEventListener("click", () => $("cabOverlay").classList.remove("show"));
+  $("cabCopy").addEventListener("click", sendAck);
+}
+
+function sendCommand(key) {
+  if (!CMDS[key]) return;
+  if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: "command", cmd: key }));
+  showCommand(key, "You");   // reflect what you sent
+}
+
+function showCommand(key, name) {
+  const c = CMDS[key];
+  if (!c) return;
+  currentCmd = key;
+  const text = c.label;
+  // Inline command bar
+  const bar = $("cmdBar");
+  bar.textContent = name && name !== "You" ? `${text} — ${name}` : text;
+  bar.style.background = c.color;
+  bar.classList.add("active");
+  // Cab-mode giant display
+  $("cabCmd").textContent = text;
+  $("cabCmd").style.background = c.color;
+  $("cabFrom").textContent = name && name !== "You" ? "from " + name : "you sent this";
+  const copy = $("cabCopy"); copy.classList.remove("done"); copy.textContent = "✓ COPY";
+  // Distinct tone + spoken directive (spoken helps an operator watching the machine)
+  playTone(c.tone);
+  speakAloud(c.label);
+  if (navigator.vibrate) navigator.vibrate(120);
+}
+
+function sendAck() {
+  if (!currentCmd) { toast("No command to copy yet"); return; }
+  if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: "ack", cmd: currentCmd }));
+  const copy = $("cabCopy"); copy.classList.add("done"); copy.textContent = "✓ COPIED";
+  toast("Copied — spotter notified");
+}
+
+function showAck(name, cmd) {
+  const c = CMDS[cmd];
+  toast(`✓ ${name} copied: ${c ? c.label : cmd}`);
+}
+
+function playTone(freq) {
+  try {
+    ensureCtx();
+    ctx.resume();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "triangle";
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+    o.connect(g); g.connect(ctx.destination); // bypass master-mute — commands are important
+    o.start();
+    o.stop(ctx.currentTime + 0.38);
+  } catch {}
 }
 function editTopic() {
   const bar = $("topicBar");
@@ -1714,6 +1862,7 @@ function updateStatus() {
 initSettings();
 initChannels();
 setupAlert();
+setupWork();
 </script>
 </body>
 </html>
