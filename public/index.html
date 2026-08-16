@@ -146,6 +146,60 @@
     background: var(--bg); border: 1px solid var(--line); border-radius: 8px; color: var(--text);
   }
 
+  /* Channel switcher button in header */
+  .chan-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
+    max-width: 46vw; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .chan-btn .caret { color: var(--muted); font-size: 11px; }
+
+  /* Emergency STOP / ALERT button */
+  .alert-btn {
+    display: none; width: 100%; margin-bottom: 12px; padding: 16px;
+    background: #e11d1d; color: #fff; border: none; border-radius: 12px;
+    font-size: 17px; font-weight: 800; letter-spacing: .3px; cursor: pointer;
+    box-shadow: 0 2px 14px rgba(225,29,29,.4);
+  }
+  .alert-btn.show { display: block; }
+  .alert-btn:active { transform: scale(.98); }
+  .alert-btn.sent { background: #7a1010; }
+
+  /* Full-screen alert overlay (receiver) */
+  #alertOverlay {
+    display: none; position: fixed; inset: 0; z-index: 90;
+    align-items: center; justify-content: center; padding: 24px;
+    background: #b30000; animation: alertFlash .5s steps(1) infinite;
+  }
+  #alertOverlay.show { display: flex; }
+  @keyframes alertFlash { 0%,100% { background: #b30000; } 50% { background: #300; } }
+  .alert-box { text-align: center; color: #fff; max-width: 420px; }
+  .alert-title { font-size: 64px; font-weight: 900; letter-spacing: 1px; }
+  .alert-sub { font-size: 20px; font-weight: 600; margin: 10px 0 24px; }
+  #alertAck {
+    padding: 16px 34px; font-size: 18px; font-weight: 800;
+    background: #fff; color: #b30000; border: none; border-radius: 14px; cursor: pointer;
+  }
+
+  /* Saved channel lists (join screen + channels sheet) */
+  .saved { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .chan-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  .chan-row {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px;
+  }
+  .chan-row.work { border-color: #d9822b; }
+  .chan-go { flex: 1; display: flex; align-items: center; gap: 8px; background: none; border: none; color: var(--text); font-size: 15px; text-align: left; cursor: pointer; padding: 4px; overflow: hidden; }
+  .chan-go .cname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chan-badge { font-size: 15px; flex: none; }
+  .chan-iconbtn { background: transparent; border: none; font-size: 17px; cursor: pointer; opacity: .55; padding: 4px; line-height: 1; }
+  .chan-iconbtn.on { opacity: 1; }
+  .chan-input { display: flex; gap: 8px; }
+  .chan-input input { flex: 1; margin: 0; padding: 12px 14px; }
+  .chan-input .chip { padding: 0 18px; }
+  .saved .saved-label { color: var(--muted); font-size: 13px; }
+
   /* Join screen */
   .join { max-width: 380px; margin: auto; width: 100%; text-align: center; }
   .join p { color: var(--muted); }
@@ -303,7 +357,7 @@
 <header>
   <h1>🎙️ WALKIE</h1>
   <div class="head-right">
-    <span class="room" id="roomLabel"></span>
+    <button class="chan-btn" id="chanBtn"><span id="roomLabel"></span><span class="caret">▾</span></button>
     <button class="theme-toggle" id="settingsBtn" title="Settings">⚙️</button>
   </div>
 </header>
@@ -315,6 +369,7 @@
     <input id="nameInput" placeholder="Your name" maxlength="24" autocomplete="off" />
     <input id="roomInput" placeholder="Channel name (e.g. roadtrip)" maxlength="32" autocomplete="off" />
     <button class="primary" id="joinBtn">Join channel</button>
+    <div class="saved" id="joinChannels"></div>
     <p class="hint" style="margin-top:20px">Works best over Wi-Fi or cell data on any phone. Uses your mic — you'll be asked for permission.</p>
   </section>
 
@@ -328,6 +383,7 @@
         <button class="chip" id="masterMuteBtn">🔊 Listening</button>
       </div>
     </div>
+    <button type="button" class="alert-btn" id="alertBtn">🛑 STOP / ALERT — tap to warn everyone</button>
     <div class="topic empty" id="topicBar">
       <span class="pin">📌</span><span id="topicText">Set a channel topic…</span>
     </div>
@@ -434,6 +490,37 @@
       <button type="button" class="sheet-done" id="settingsDone">Done</button>
     </div>
   </div>
+
+  <!-- CHANNELS SHEET -->
+  <div class="sheet-backdrop" id="chanSheet">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>Channels</h2>
+        <button type="button" class="sheet-close" id="chanClose">✕</button>
+      </div>
+      <div class="set-group">
+        <div class="set-label">Your channels <span class="set-sub">(tap 💼 to make it a work channel)</span></div>
+        <ul class="chan-list" id="chanList"></ul>
+      </div>
+      <div class="set-group">
+        <div class="set-label">Join / start a channel</div>
+        <form class="chan-input" id="chanNewForm">
+          <input id="chanNewInput" placeholder="Channel name" maxlength="32" autocomplete="off" />
+          <button type="submit" class="chip">Go</button>
+        </form>
+      </div>
+      <button type="button" class="sheet-done" id="chanDone">Done</button>
+    </div>
+  </div>
+
+  <!-- EMERGENCY ALERT OVERLAY -->
+  <div id="alertOverlay">
+    <div class="alert-box">
+      <div class="alert-title">🛑 STOP</div>
+      <div class="alert-sub" id="alertSub">Someone flagged a problem</div>
+      <button type="button" id="alertAck">Got it</button>
+    </div>
+  </div>
 </main>
 
 <script>
@@ -485,6 +572,8 @@ let recognition = null, captionsOn = false, lastCaptionSent = 0, captionHideTime
 let readAloud = localStorage.getItem("wt_readaloud") === "1";
 let chirpsOn = localStorage.getItem("wt_chirp") !== "0";
 let announceJoins = localStorage.getItem("wt_announce") === "1";
+let currentChannelType = "casual";   // "work" channels show the STOP/ALERT button
+let alarmNodes = [], alertCooldown = 0;
 // Rolling recorder (for replay)
 let ring, ringLen = 0, ringPos = 0, totalWritten = 0, recSampleRate = 48000;
 // Utterance tracking
@@ -529,7 +618,12 @@ async function join() {
   buildLocalAudio();       // mic -> gain -> outgoing track (gain 0 = silent)
   $("joinScreen").style.display = "none";
   $("talkScreen").style.display = "flex";
+
+  addChannel(room);                             // remember it
+  currentChannelType = getChannelType(room);
   $("roomLabel").textContent = "#" + room.toLowerCase();
+  updateAlertVisibility();
+  renderAllChannelLists();
 
   setupModeToggle();
   setupPTT();
@@ -738,6 +832,8 @@ function connectSignaling(name, room) {
       if (readAloud) speakAloud(`${msg.name || "Someone"} says: ${msg.text}`);
     } else if (msg.type === "topic") {
       showTopic(msg.text, msg.name);
+    } else if (msg.type === "alert") {
+      showAlert(msg.name || "Someone");
     } else if (msg.type === "caption") {
       showCaption(msg.name || "Anon", msg.text, msg.final);
     } else if (msg.type === "reaction") {
@@ -1130,6 +1226,184 @@ function playChirp(up) {
 function setupTopic() {
   $("topicBar").addEventListener("click", editTopic);
 }
+
+// ================= Saved channels + work channels =================
+function loadChannels() {
+  try { return JSON.parse(localStorage.getItem("wt_channels") || "[]"); } catch { return []; }
+}
+function saveChannels(list) { localStorage.setItem("wt_channels", JSON.stringify(list)); }
+function getChannelType(name) {
+  const c = loadChannels().find((c) => c.name === name.trim().toLowerCase());
+  return c ? c.type : "casual";
+}
+function addChannel(name, type) {
+  name = name.trim().toLowerCase();
+  if (!name) return;
+  const list = loadChannels();
+  const ex = list.find((c) => c.name === name);
+  if (ex) { if (type) ex.type = type; }
+  else list.unshift({ name, type: type || "casual" });
+  saveChannels(list.slice(0, 20));
+}
+function setChannelType(name, type) {
+  addChannel(name, type);
+  if (currentRoom && name.trim().toLowerCase() === currentRoom.toLowerCase()) {
+    currentChannelType = type;
+    updateAlertVisibility();
+  }
+  renderAllChannelLists();
+}
+function removeChannel(name) {
+  saveChannels(loadChannels().filter((c) => c.name !== name.trim().toLowerCase()));
+  renderAllChannelLists();
+}
+
+function renderAllChannelLists() {
+  renderChannelRows($("joinChannels"), false);
+  renderChannelRows($("chanList"), true);
+}
+function renderChannelRows(container, inSheet) {
+  if (!container) return;
+  container.innerHTML = "";
+  const list = loadChannels();
+  if (list.length === 0) {
+    if (!inSheet) return;
+    const li = document.createElement("li");
+    li.className = "set-sub"; li.textContent = "No saved channels yet.";
+    container.appendChild(li);
+    return;
+  }
+  if (!inSheet && container.id === "joinChannels") {
+    const lbl = document.createElement("div");
+    lbl.className = "saved-label"; lbl.textContent = "Your channels";
+    container.appendChild(lbl);
+  }
+  for (const c of list) {
+    const isCurrent = currentRoom && c.name === currentRoom.toLowerCase();
+    const row = document.createElement(inSheet ? "li" : "div");
+    row.className = "chan-row" + (c.type === "work" ? " work" : "");
+    const badge = c.type === "work" ? "💼" : "👥";
+    row.innerHTML =
+      `<button type="button" class="chan-go">
+         <span class="chan-badge">${badge}</span>
+         <span class="cname"></span>
+       </button>
+       <button type="button" class="chan-iconbtn work-toggle ${c.type === "work" ? "on" : ""}" title="Work channel">💼</button>
+       <button type="button" class="chan-iconbtn" title="Remove">🗑️</button>`;
+    row.querySelector(".cname").textContent = "#" + c.name + (isCurrent ? " (here)" : "");
+    row.querySelector(".chan-go").addEventListener("click", () => {
+      if (inSheet) switchChannel(c.name);
+      else { $("roomInput").value = c.name; join(); }
+    });
+    row.querySelector(".work-toggle").addEventListener("click", (e) => {
+      e.stopPropagation();
+      setChannelType(c.name, c.type === "work" ? "casual" : "work");
+    });
+    row.querySelectorAll(".chan-iconbtn")[1].addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeChannel(c.name);
+    });
+    container.appendChild(row);
+  }
+}
+
+// Switch channels without leaving the app (mic + audio graph stay set up)
+function switchChannel(name) {
+  name = name.trim();
+  if (!name) return;
+  $("chanSheet").classList.remove("show");
+  if (currentRoom && name.toLowerCase() === currentRoom.toLowerCase()) return;
+
+  setTransmitting(false);
+  clearTimeout(reconnectTimer);
+  if (ws) { ws.onclose = null; try { ws.close(); } catch {} }
+  for (const id of [...peers.keys()]) removePeer(id);
+  $("messages").innerHTML = "";
+  showTopic("");
+  nowKey = "";
+
+  addChannel(name);
+  currentChannelType = getChannelType(name);
+  $("roomLabel").textContent = "#" + name.toLowerCase();
+  updateAlertVisibility();
+  renderAllChannelLists();
+  connectSignaling(currentName, name);
+}
+
+function initChannels() {
+  const openChan = () => { renderAllChannelLists(); $("chanSheet").classList.add("show"); };
+  const closeChan = () => $("chanSheet").classList.remove("show");
+  $("chanBtn").addEventListener("click", openChan);
+  $("chanClose").addEventListener("click", closeChan);
+  $("chanDone").addEventListener("click", closeChan);
+  $("chanSheet").addEventListener("click", (e) => { if (e.target.id === "chanSheet") closeChan(); });
+  $("chanNewForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const v = $("chanNewInput").value.trim();
+    if (!v) return;
+    $("chanNewInput").value = "";
+    switchChannel(v);
+  });
+  renderAllChannelLists();
+}
+
+// ================= Emergency STOP / ALERT =================
+function updateAlertVisibility() {
+  $("alertBtn").classList.toggle("show", currentChannelType === "work");
+}
+function setupAlert() {
+  $("alertBtn").addEventListener("click", sendAlert);
+  $("alertAck").addEventListener("click", hideAlert);
+}
+function sendAlert() {
+  const now = Date.now();
+  if (now < alertCooldown) return;         // prevent accidental double-fire
+  alertCooldown = now + 2000;
+  if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: "alert" }));
+  const b = $("alertBtn");
+  b.classList.add("sent");
+  b.textContent = "🛑 ALERT SENT";
+  if (navigator.vibrate) navigator.vibrate(200);
+  setTimeout(() => { b.classList.remove("sent"); b.textContent = "🛑 STOP / ALERT — tap to warn everyone"; }, 2000);
+}
+function showAlert(name) {
+  $("alertSub").textContent = `${name}: STOP — something's wrong`;
+  $("alertOverlay").classList.add("show");
+  requestWakeLock();
+  playAlarm();
+  // Strong repeating buzz (Android; iOS ignores vibration)
+  if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400, 150, 400]);
+  clearTimeout(showAlert._timer);
+  showAlert._timer = setTimeout(hideAlert, 12000); // auto-clear if not acknowledged
+}
+function hideAlert() {
+  $("alertOverlay").classList.remove("show");
+  stopAlarm();
+  clearTimeout(showAlert._timer);
+}
+function playAlarm() {
+  try {
+    ensureCtx();
+    ctx.resume();
+    stopAlarm();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "square";
+    g.gain.value = 0.5;
+    // Bypass masterGain so a muted listener still hears the safety alarm
+    o.connect(g); g.connect(ctx.destination);
+    const t0 = ctx.currentTime;
+    for (let i = 0; i < 40; i++) o.frequency.setValueAtTime(i % 2 ? 1245 : 830, t0 + i * 0.22); // ~9s siren
+    o.start(t0);
+    o.stop(t0 + 8.8);
+    o.onended = () => { alarmNodes = []; };
+    alarmNodes = [o, g];
+  } catch {}
+}
+function stopAlarm() {
+  for (const n of alarmNodes) { try { n.stop && n.stop(); } catch {} try { n.disconnect(); } catch {} }
+  alarmNodes = [];
+}
 function editTopic() {
   const bar = $("topicBar");
   if (bar.querySelector("input")) return;
@@ -1433,8 +1707,10 @@ function updateStatus() {
   setStatus(n === 0 ? "Waiting for others…" : `${n} other${n === 1 ? "" : "s"} in the channel`);
 }
 
-// Apply saved appearance + wire the settings sheet immediately (before joining)
+// Apply saved appearance + wire the sheets immediately (before joining)
 initSettings();
+initChannels();
+setupAlert();
 </script>
 </body>
 </html>

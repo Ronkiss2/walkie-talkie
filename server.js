@@ -128,6 +128,12 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    // Emergency STOP alert — highest priority, relay immediately
+    if (msg.type === "alert") {
+      broadcast(ws.room, ws.peerId, { type: "alert", name: ws.name });
+      return;
+    }
+
     // Set the channel topic (stored + shown to everyone, incl. late joiners)
     if (msg.type === "topic") {
       const text = String(msg.text || "").slice(0, 120).trim();

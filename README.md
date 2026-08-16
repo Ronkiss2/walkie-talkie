@@ -32,6 +32,12 @@ and hold a button to talk to everyone at once. Works on iPhone + Android, no app
 - **Settings sheet** (⚙️): light/dark theme, accent color, background presets, a
   **voice changer** (robot / alien / megaphone / telephone — changes how *you*
   sound to others), radio filter, captions, read-aloud, and chirp toggles.
+- **Saved channels + work channels** — recent channels are saved; mark any as a
+  **work** channel (💼). Switch between them from the header without leaving.
+- **🛑 STOP / ALERT** (work channels) — one tap blasts a loud siren, a full-screen
+  red flashing warning, and a strong vibration on everyone's phone. Built for
+  safety-critical "stop now" moments (e.g. spotting heavy equipment). The alarm
+  bypasses the listener's master-mute; note it can't override a phone set to silent.
 - **Channel topic** — a pinned note everyone sees, kept for people who join later.
 - **Read chat aloud** — incoming texts spoken via the device's text-to-speech.
 
