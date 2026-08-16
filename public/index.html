@@ -1349,7 +1349,10 @@ function initChannels() {
 
 // ================= Emergency STOP / ALERT =================
 function updateAlertVisibility() {
-  $("alertBtn").classList.toggle("show", currentChannelType === "work");
+  const work = currentChannelType === "work";
+  // Work channels: show the STOP button, hide the casual/fun bits (emoji reactions)
+  $("alertBtn").classList.toggle("show", work);
+  $("reactions").style.display = work ? "none" : "";
 }
 function setupAlert() {
   $("alertBtn").addEventListener("click", sendAlert);
